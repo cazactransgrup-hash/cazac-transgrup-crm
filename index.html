@@ -35,6 +35,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <button onclick="show('vehicles')">🚐 Vehicule</button>
 <button onclick="show('finance')">💰 Financiar</button>
 <button onclick="show('reports')">📊 Rapoarte</button>
+<button onclick="show('fuel')">⛽ Combustibil</button>
 <button onclick="logout()">↩ Ieșire</button>
 </aside>
 <main class="main">
@@ -65,6 +66,28 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 
 <section id="clients"><h2>Clienți</h2><div class="panel" id="clientsTable"></div></section>
 <section id="drivers"><h2>Șoferi</h2><div class="panel" id="driversTable"></div></section>
+<section id="fuel">
+<h2>⛽ Combustibil</h2>
+<div class="panel">
+<h3>Adaugă alimentare</h3>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+<div><label>Vehicul</label><select id="fuelVehicle"></select></div>
+<div><label>Șofer</label><select id="fuelDriver"></select></div>
+<div><label>Data</label><input type="date" id="fuelDate"></div>
+<div><label>Litri</label><input type="number" step="0.01" id="fuelLiters" placeholder="0"></div>
+<div><label>Preț/litru</label><input type="number" step="0.01" id="fuelPrice" placeholder="0"></div>
+<div><label>Kilometraj</label><input type="number" step="0.1" id="fuelOdometer" placeholder="0"></div>
+</div>
+<div><label>Observații</label><input id="fuelNotes" placeholder="Opțional"></div>
+<button class="btn" onclick="addFuelLog()">➕ Salvează alimentarea</button>
+</div>
+<div class="cards">
+<div class="card">Total litri<b id="fuelTotalLiters">0</b></div>
+<div class="card">Cost combustibil<b id="fuelTotalCost">0 lei</b></div>
+</div>
+<div class="panel"><h3>Alimentări</h3><div id="fuelTable"></div></div>
+</section>
+
 <section id="reports">
 <h2>📊 Rapoarte</h2>
 <div class="panel">
@@ -112,7 +135,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 const SUPABASE_URL="https://vroqxrcuqgwhmnacenfo.supabase.co";
 const SUPABASE_KEY="sb_publishable_vVvOwJ7rNnCBKqdTjGd5Tw_QozYFQye";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let orders=[],clients=[],drivers=[],vehicles=[],currentProfile=null;
+let orders=[],clients=[],drivers=[],vehicles=[],fuelLogs=[],currentProfile=null;
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 function table(headers,rows){
@@ -146,15 +169,17 @@ async function login(){
 }
 $("loginBtn").onclick=login;$("passwordInput").onkeydown=e=>{if(e.key==="Enter")login()};
 async function load(){
- const [o,c,d,v]=await Promise.all([
+ const [o,c,d,v,f]=await Promise.all([
   db.from("orders").select("*").order("id",{ascending:false}),
   db.from("clients").select("*").order("id",{ascending:false}),
   db.from("drivers").select("*").order("id",{ascending:false}),
-  db.from("vehicles").select("*").order("id",{ascending:false})
+  db.from("vehicles").select("*").order("id",{ascending:false}),
+  db.from("fuel_logs").select("*").order("date",{ascending:false})
  ]);
  if(o.error||c.error||d.error||v.error){console.error(o.error,c.error,d.error,v.error);alert("Eroare la citirea datelor din Supabase.");return}
  orders=o.data||[];clients=c.data||[];drivers=d.data||[];vehicles=v.data||[];
  render();
+ renderFuel();
  if(!$("reportFrom").value){setReportPeriod("today");}
 }
 function localDateInput(d){
@@ -206,6 +231,45 @@ function renderReport(){
      ];
    })
  );
+}
+function fillFuelSelects(){
+ $("fuelVehicle").innerHTML=vehicles.map(v=>`<option value="${v.id}">${esc(v.plate||v.registration_number||"Vehicul "+v.id)} — ${esc(v.model||"")}</option>`).join("");
+ $("fuelDriver").innerHTML=drivers.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join("");
+ const now=new Date();
+ if(!$("fuelDate").value) $("fuelDate").value=localDateInput(now);
+}
+async function addFuelLog(){
+ const vehicle_id=Number($("fuelVehicle").value);
+ const driver_id=Number($("fuelDriver").value);
+ const date=$("fuelDate").value;
+ const liters=Number($("fuelLiters").value);
+ const price_per_liter=Number($("fuelPrice").value);
+ const odometer=Number($("fuelOdometer").value||0);
+ const notes=$("fuelNotes").value.trim();
+ if(!vehicle_id||!driver_id||!date||liters<=0||price_per_liter<=0){alert("Completează vehiculul, șoferul, data, litrii și prețul.");return}
+ const {error}=await db.from("fuel_logs").insert({vehicle_id,driver_id,date:date+"T12:00:00",liters,price_per_liter,odometer,notes});
+ if(error){alert("Eroare la salvarea alimentării: "+error.message);return}
+ $("fuelLiters").value="";$("fuelPrice").value="";$("fuelOdometer").value="";$("fuelNotes").value="";
+ await load();
+ alert("Alimentarea a fost salvată.");
+}
+function renderFuel(){
+ if(!$("fuelTable"))return;
+ fillFuelSelects();
+ const totalLiters=fuelLogs.reduce((a,x)=>a+Number(x.liters||0),0);
+ const totalCost=fuelLogs.reduce((a,x)=>a+Number(x.total_cost||Number(x.liters||0)*Number(x.price_per_liter||0)),0);
+ $("fuelTotalLiters").textContent=totalLiters.toFixed(2)+" L";
+ $("fuelTotalCost").textContent=totalCost.toFixed(2)+" lei";
+ $("fuelTable").innerHTML=table(["Data","Vehicul","Șofer","Litri","Preț/L","Cost","Km","Observații"],fuelLogs.map(x=>[
+   new Date(x.date).toLocaleDateString("ro-RO"),
+   vehicles.find(v=>Number(v.id)===Number(x.vehicle_id))?.plate||("ID "+x.vehicle_id),
+   drivers.find(d=>Number(d.id)===Number(x.driver_id))?.name||("ID "+x.driver_id),
+   Number(x.liters||0).toFixed(2),
+   Number(x.price_per_liter||0).toFixed(2)+" lei",
+   Number(x.total_cost||Number(x.liters||0)*Number(x.price_per_liter||0)).toFixed(2)+" lei",
+   Number(x.odometer||0).toFixed(1),
+   x.notes||"—"
+ ]));
 }
 function render(){
  $("cntOrders").textContent=orders.length;
