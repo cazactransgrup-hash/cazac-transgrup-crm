@@ -33,6 +33,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <button onclick="show('clients')">👥 Clienți</button>
 <button onclick="show('drivers')">🚚 Șoferi</button>
 <button onclick="show('vehicles')">🚐 Vehicule</button>
+<button onclick="show('finance')">💰 Financiar</button>
 <button onclick="logout()">↩ Ieșire</button>
 </aside>
 <main class="main">
@@ -63,6 +64,20 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 
 <section id="clients"><h2>Clienți</h2><div class="panel" id="clientsTable"></div></section>
 <section id="drivers"><h2>Șoferi</h2><div class="panel" id="driversTable"></div></section>
+<section id="finance">
+<h2>💰 Financiar</h2>
+<div class="cards">
+<div class="card">Total încasat<b id="finPaid">0 lei</b></div>
+<div class="card">Total neîncasat<b id="finUnpaid">0 lei</b></div>
+<div class="card">Cash la șoferi<b id="finCash">0 lei</b></div>
+<div class="card">Comenzi plătite<b id="finPaidOrders">0</b></div>
+</div>
+<div class="panel">
+<h3>Încasări pe șofer</h3>
+<div id="driverFinanceTable"></div>
+</div>
+</section>
+
 <section id="vehicles"><h2>Vehicule</h2><div class="panel" id="vehiclesTable"></div></section>
 </main></div>
 
@@ -131,6 +146,29 @@ function render(){
  $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
  $("driversTable").innerHTML=table(["ID","Nume","Telefon"],drivers.map(x=>[x.id,x.name,x.phone]));
  $("vehiclesTable").innerHTML=table(["ID","Număr","Model","Șofer","Consum"],vehicles.map(x=>[x.id,x.plate||x.registration_number,x.model,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.fuel_consumption]));
+
+ const paidOrders=orders.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
+ const paidTotal=paidOrders.reduce((a,x)=>a+Number(x.paid_amount||0),0);
+ const unpaidTotal=orders.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat")
+   .reduce((a,x)=>a+Number(x.cash||0),0);
+ const cashTotal=paidOrders.filter(x=>String(x.payment_method||"").toLowerCase()==="cash")
+   .reduce((a,x)=>a+Number(x.paid_amount||0),0);
+ $("finPaid").textContent=paidTotal.toFixed(2)+" lei";
+ $("finUnpaid").textContent=unpaidTotal.toFixed(2)+" lei";
+ $("finCash").textContent=cashTotal.toFixed(2)+" lei";
+ $("finPaidOrders").textContent=paidOrders.length;
+
+ $("driverFinanceTable").innerHTML=table(
+   ["Șofer","Comenzi plătite","Încasat","Cash","Neîncasat"],
+   drivers.map(d=>{
+     const ds=orders.filter(x=>Number(x.driver_id)===Number(d.id));
+     const po=ds.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
+     const paid=po.reduce((a,x)=>a+Number(x.paid_amount||0),0);
+     const cash=po.filter(x=>String(x.payment_method||"").toLowerCase()==="cash").reduce((a,x)=>a+Number(x.paid_amount||0),0);
+     const unpaid=ds.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0);
+     return [d.name,po.length,paid.toFixed(2)+" lei",cash.toFixed(2)+" lei",unpaid.toFixed(2)+" lei"];
+   })
+ );
 }
 function navigateToOrder(orderId){
  const order=orders.find(x=>Number(x.id)===Number(orderId));
