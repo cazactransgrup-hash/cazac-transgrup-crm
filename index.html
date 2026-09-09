@@ -434,59 +434,74 @@ function markerIcon(status){
  return L.divIcon({className:"",html:`<div style="width:18px;height:18px;border-radius:50%;background:${bg};border:3px solid #fff;box-shadow:0 1px 6px #0006"></div>`,iconSize:[18,18],iconAnchor:[9,9],popupAnchor:[0,-8]});
 }
 async function geocodeOrder(order){
- if(Number.isFinite(Number(order.latitude))&&Number.isFinite(Number(order.longitude)))return {lat:Number(order.latitude),lon:Number(order.longitude),saved:false};
- const q=[order.address,order.city,"Moldova"].filter(Boolean).join(", ");
- if(!q)return null;
- try{
-   const url="https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=md&accept-language=ro&q="+encodeURIComponent(q);
-   const res=await fetch(url,{headers:{"Accept":"application/json"}});
-   if(!res.ok)throw new Error("Geocodarea a returnat HTTP "+res.status);
-   const data=await res.json();
-   if(!data.length)return null;
-   const lat=Number(data[0].lat),lon=Number(data[0].lon);
-   if(!Number.isFinite(lat)||!Number.isFinite(lon))return null;
-   const {error}=await db.from("orders").update({latitude:lat,longitude:lon}).eq("id",order.id);
-   if(error)console.warn("Coordonatele nu au putut fi salvate pentru comanda "+order.id,error.message);
-   order.latitude=lat;order.longitude=lon;
-   return {lat,lon,saved:!error};
- }catch(e){console.warn("Geocodare eșuată pentru",q,e);return null;}
+  if(Number.isFinite(Number(order.latitude))&&Number.isFinite(Number(order.longitude)))
+    return {lat:Number(order.latitude),lon:Number(order.longitude),saved:false};
+  const queries=[];
+  const address=String(order.address||'').trim();
+  const city=String(order.city||'').trim();
+  if(address&&city) queries.push(`${address}, ${city}, Moldova`);
+  if(address) queries.push(`${address}, Moldova`);
+  if(city) queries.push(`${city}, Moldova`);
+  for(const q of queries){
+    try{
+      const url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=md&accept-language=ro&q='+encodeURIComponent(q);
+      const res=await fetch(url);
+      if(!res.ok) continue;
+      const data=await res.json();
+      if(!Array.isArray(data)||!data.length) continue;
+      const lat=Number(data[0].lat),lon=Number(data[0].lon);
+      if(!Number.isFinite(lat)||!Number.isFinite(lon)) continue;
+      const {error}=await db.from('orders').update({latitude:lat,longitude:lon}).eq('id',order.id);
+      order.latitude=lat; order.longitude=lon;
+      return {lat,lon,saved:!error,query:q,exact:queries.indexOf(q)===0};
+    }catch(e){ console.warn('Geocodare:',q,e); }
+  }
+  return null;
 }
 async function openOrdersMap(){
- const box=$("ordersMap"),status=$("mapStatus");
- if(!box||!window.L||mapOpening)return;
- mapOpening=true;
- status.textContent="Se încarcă comenzile pe hartă...";
- if(!ordersMap){
-   ordersMap=L.map(box).setView([47.15,28.6],7.5);
-   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(ordersMap);
-   ordersMapMarkers=L.layerGroup().addTo(ordersMap);
- }else{
-   ordersMap.invalidateSize();
-   ordersMapMarkers.clearLayers();
- }
- const points=[];let located=0,missing=0,geocoded=0;
- const total=orders.length;
- for(let i=0;i<total;i++){
-   const o=orders[i];
-   status.textContent=`Localizez comenzile: ${i+1}/${total}...`;
-   const wasMissing=!(Number.isFinite(Number(o.latitude))&&Number.isFinite(Number(o.longitude)));
-   const point=await geocodeOrder(o);
-   if(point){
-     located++;if(wasMissing)geocoded++;
-     const client=clients.find(c=>Number(c.id)===Number(o.client_id));
-     const driver=drivers.find(d=>Number(d.id)===Number(o.driver_id));
-     const popup=`<div style="min-width:230px"><b>${esc(o.code||"Comandă")}</b><br><b>Client:</b> ${esc(client?.name||"—")}<br><b>Destinatar:</b> ${esc(o.recipient||"—")}<br><b>Telefon:</b> ${esc(o.phone||"—")}<br><b>Adresă:</b> ${esc([o.address,o.city].filter(Boolean).join(", "))}<br><b>Ramburs:</b> ${Number(o.cash||0).toFixed(2)} lei<br><b>Șofer:</b> ${esc(driver?.name||"—")}<br><b>Status:</b> ${esc(o.status||"—")}<br><br><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([o.address,o.city].filter(Boolean).join(", "))}" target="_blank">📍 Deschide navigarea</a></div>`;
-     L.marker([point.lat,point.lon],{icon:markerIcon(o.status)}).bindPopup(popup).addTo(ordersMapMarkers);
-     points.push([point.lat,point.lon]);
-   }else missing++;
-   if(wasMissing)await new Promise(r=>setTimeout(r,1100));
- }
- if(points.length){
-   if(points.length===1)ordersMap.setView(points[0],15);else ordersMap.fitBounds(points,{padding:[30,30],maxZoom:13});
- }
- status.textContent=`${located} din ${total} comenzi sunt pe hartă${geocoded?` · ${geocoded} adrese geocodate automat`:""}${missing?` · ${missing} fără coordonate`:""}.`;
- ordersMap.invalidateSize();
- mapOpening=false;
+  const box=$('ordersMap'), status=$('mapStatus');
+  if(!box||mapOpening)return;
+  mapOpening=true;
+  try{
+    if(!window.L){status.textContent='Harta nu s-a încărcat. Reîncarcă pagina.';return;}
+    status.textContent='Se încarcă comenzile...';
+    const {data:freshOrders,error}=await db.from('orders').select('*').order('id',{ascending:false});
+    if(error) throw error;
+    orders=freshOrders||[];
+    if(!ordersMap){
+      ordersMap=L.map(box).setView([47.15,28.6],7.5);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(ordersMap);
+      ordersMapMarkers=L.layerGroup().addTo(ordersMap);
+    }else{
+      ordersMap.invalidateSize();
+      ordersMapMarkers.clearLayers();
+    }
+    const points=[]; let located=0,missing=0,geocoded=0;
+    const total=orders.length;
+    for(let i=0;i<total;i++){
+      const o=orders[i];
+      status.textContent=`Localizez comenzile: ${i+1}/${total} din ${total}...`;
+      const wasMissing=!(Number.isFinite(Number(o.latitude))&&Number.isFinite(Number(o.longitude)));
+      const point=await geocodeOrder(o);
+      if(point){
+        located++; if(wasMissing)geocoded++;
+        const client=clients.find(c=>Number(c.id)===Number(o.client_id));
+        const driver=drivers.find(d=>Number(d.id)===Number(o.driver_id));
+        const addressText=[o.address,o.city].filter(Boolean).join(', ');
+        const popup=`<div style="min-width:240px"><b>${esc(o.code||'Comandă')}</b><br><b>Client:</b> ${esc(client?.name||'—')}<br><b>Destinatar:</b> ${esc(o.recipient||'—')}<br><b>Telefon:</b> ${esc(o.phone||'—')}<br><b>Adresă:</b> ${esc(addressText||'—')}<br><b>Ramburs:</b> ${Number(o.cash||0).toFixed(2)} lei<br><b>Șofer:</b> ${esc(driver?.name||'—')}<br><b>Status:</b> ${esc(o.status||'—')}<br><br><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}" target="_blank">📍 Navigare</a></div>`;
+        L.marker([point.lat,point.lon],{icon:markerIcon(o.status)}).bindPopup(popup).addTo(ordersMapMarkers);
+        points.push([point.lat,point.lon]);
+      }else missing++;
+      if(wasMissing && i<total-1) await new Promise(r=>setTimeout(r,1100));
+    }
+    if(points.length===1) ordersMap.setView(points[0],15);
+    else if(points.length>1) ordersMap.fitBounds(points,{padding:[30,30],maxZoom:13});
+    status.textContent=`${located} din ${total} comenzi sunt pe hartă${geocoded?` · ${geocoded} localizate automat`:''}${missing?` · ${missing} fără coordonate`:''}.`;
+    ordersMap.invalidateSize();
+  }catch(e){
+    console.error(e);
+    status.textContent='Eroare la încărcarea hărții: '+(e?.message||e);
+  }finally{ mapOpening=false; }
 }
 function navigateToOrder(orderId){
  const order=orders.find(x=>Number(x.id)===Number(orderId));
