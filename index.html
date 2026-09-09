@@ -120,11 +120,18 @@ function render(){
  x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.cash,x.weight,x.status,
  x.failure_reason||"—",
  currentProfile?.role==="driver"
- ? `<button class="btn" style="padding:7px 10px;margin-right:5px" onclick="driverDelivered(${x.id})">Livrată</button><button class="btn" style="padding:7px 10px;background:#dc2626" onclick="driverFailed(${x.id})">Nereușită</button>`
+ ? `<button class="btn" style="padding:7px 10px;margin-right:5px;background:#0f766e" onclick="navigateToOrder(${x.id})">📍 Navigare</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="driverDelivered(${x.id})">Livrată</button><button class="btn" style="padding:7px 10px;background:#dc2626" onclick="driverFailed(${x.id})">Nereușită</button>`
  : "—"]));
  $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
  $("driversTable").innerHTML=table(["ID","Nume","Telefon"],drivers.map(x=>[x.id,x.name,x.phone]));
  $("vehiclesTable").innerHTML=table(["ID","Număr","Model","Șofer","Consum"],vehicles.map(x=>[x.id,x.plate||x.registration_number,x.model,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.fuel_consumption]));
+}
+function navigateToOrder(orderId){
+ const order=orders.find(x=>Number(x.id)===Number(orderId));
+ if(!order){alert("Comanda nu a fost găsită.");return}
+ const destination=[order.address,order.city].filter(Boolean).join(", ");
+ if(!destination){alert("Comanda nu are adresă.");return}
+ window.open("https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(destination),"_blank");
 }
 async function driverDelivered(orderId){
  const {error}=await db.from("orders").update({status:"Livrată"}).eq("id",orderId);
