@@ -179,8 +179,12 @@ async function load(){
   db.from("vehicles").select("*").order("id",{ascending:false}),
   db.from("fuel_logs").select("*").order("date",{ascending:false})
  ]);
- if(o.error||c.error||d.error||v.error){console.error(o.error,c.error,d.error,v.error);alert("Eroare la citirea datelor din Supabase.");return}
- orders=o.data||[];clients=c.data||[];drivers=d.data||[];vehicles=v.data||[];
+ if(o.error||c.error||d.error||v.error||f.error){
+  console.error(o.error,c.error,d.error,v.error,f.error);
+  alert("Eroare la citirea datelor din Supabase.");
+  return;
+}
+ orders=o.data||[];clients=c.data||[];drivers=d.data||[];vehicles=v.data||[];fuelLogs=f.data||[];
  render();
  renderFuel();
  if(!$("reportFrom").value){setReportPeriod("today");}
