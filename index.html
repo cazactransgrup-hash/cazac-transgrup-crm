@@ -9,7 +9,7 @@
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6fa;color:#172033}
 button,input{font:inherit}button{cursor:pointer}.login{min-height:100vh;display:grid;place-items:center;background:#eef3f9}
 .box{width:min(420px,92vw);background:#fff;padding:30px;border-radius:16px;box-shadow:0 12px 40px #0002}
-input{width:100%;padding:12px;margin:7px 0 15px;border:1px solid #ccd2dc;border-radius:8px}
+input,select{width:100%;padding:12px;margin:7px 0 15px;border:1px solid #ccd2dc;border-radius:8px}
 .btn{width:100%;padding:12px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:700}
 .error{display:none;background:#fff1f0;color:#b42318;padding:10px;border-radius:8px;margin-bottom:12px}
 .app{display:none}.side{position:fixed;top:0;bottom:0;width:225px;background:#111827;color:#fff;padding:20px}.side button{display:block;background:transparent;color:#fff;border:0;width:100%;padding:12px;text-align:left;border-radius:8px}.side button:hover{background:#1f2937}
@@ -41,7 +41,25 @@ input{width:100%;padding:12px;margin:7px 0 15px;border:1px solid #ccd2dc;border-
 <div class="card">Comenzi<b id="ordersCount">0</b></div><div class="card">Livrate<b id="deliveredCount">0</b></div>
 <div class="card">Șoferi<b id="driversCount">0</b></div><div class="card">Vehicule<b id="vehiclesCount">0</b></div>
 </div><div class="table" id="recent"></div></section>
-<section id="orders"><h2>Comenzi</h2><div class="table" id="ordersTable"></div></section>
+<section id="orders">
+<h2>Comenzi</h2>
+<div class="table">
+<h3>Comandă nouă</h3>
+<div id="orderError" class="error" style="display:none"></div>
+<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+<div><label>Client</label><select id="oClient"></select></div>
+<div><label>Șofer</label><select id="oDriver"></select></div>
+<div><label>Destinatar</label><input id="oRecipient" placeholder="Nume destinatar"></div>
+<div><label>Telefon</label><input id="oPhone" placeholder="069..."></div>
+<div><label>Adresă</label><input id="oAddress" placeholder="Stradă, nr."></div>
+<div><label>Localitate</label><input id="oCity" value="Chișinău"></div>
+<div><label>Încasare (lei)</label><input id="oCash" type="number" value="0"></div>
+<div><label>Greutate (kg)</label><input id="oWeight" type="number" step="0.01" value="0"></div>
+</div>
+<button id="saveOrder" class="btn" style="max-width:220px">Salvează comanda</button>
+</div>
+<div class="table" id="ordersTable"></div>
+</section>
 <section id="clients"><h2>Clienți</h2><div class="table" id="clientsTable"></div></section>
 <section id="drivers"><h2>Șoferi</h2><div class="table" id="driversTable"></div></section>
 <section id="vehicles"><h2>Vehicule</h2><div class="table" id="vehiclesTable"></div></section>
@@ -97,6 +115,7 @@ function showSection(id){document.querySelectorAll("section").forEach(s=>s.class
 function esc(x){return String(x==null?"":x).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
 function table(headers,rows){if(!rows.length)return"<p>Nu există date.</p>";return"<table><thead><tr>"+headers.map(h=>"<th>"+esc(h)+"</th>").join("")+"</tr></thead><tbody>"+rows.map(r=>"<tr>"+r.map(x=>"<td>"+esc(x)+"</td>").join("")+"</tr>").join("")+"</tbody></table>"}
 function render(){
+ fillOrderForm();
  $("ordersCount").textContent=orders.length;
  $("deliveredCount").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
  $("driversCount").textContent=drivers.length;$("vehiclesCount").textContent=vehicles.length;
@@ -107,6 +126,35 @@ function render(){
  $("vehiclesTable").innerHTML=table(["ID","Număr","Model","Șofer","Consum"],vehicles.map(x=>[x.id,x.plate||x.registration_number,x.model,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.fuel_consumption]));
  $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["Cod","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code,x.recipient,x.status]));
 }
+
+function fillOrderForm(){
+ const cs=$("oClient"), ds=$("oDriver");
+ cs.innerHTML=clients.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
+ ds.innerHTML=drivers.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
+}
+function showOrderError(text){
+ const e=$("orderError"); e.textContent=text; e.style.display="block";
+}
+async function saveOrder(){
+ const err=$("orderError"); err.style.display="none";
+ const clientId=Number($("oClient").value), driverId=Number($("oDriver").value);
+ const recipient=$("oRecipient").value.trim(), phone=$("oPhone").value.trim();
+ const address=$("oAddress").value.trim(), city=$("oCity").value.trim() || "Chișinău";
+ const cash=Number($("oCash").value||0), weight=Number($("oWeight").value||0);
+ if(!clientId||!driverId||!recipient||!address){showOrderError("Completează Client, Șofer, Destinatar și Adresă.");return}
+ const now=new Date(), y=String(now.getFullYear()).slice(-2), mo=String(now.getMonth()+1).padStart(2,"0"), da=String(now.getDate()).padStart(2,"0");
+ const code=`CTG-${y}${mo}${da}-${String(Date.now()).slice(-6)}`;
+ const {data,error}=await client.from("orders").insert({
+   code,client_id:clientId,recipient,phone,address,city,cash,weight,driver_id:driverId,status:"Nouă"
+ }).select().single();
+ if(error){showOrderError(error.message);return}
+ $("oRecipient").value="";$("oPhone").value="";$("oAddress").value="";$("oCash").value="0";$("oWeight").value="0";
+ await loadData();
+ showSection("orders");
+ alert("Comanda a fost salvată: "+data.code);
+}
+$("saveOrder").addEventListener("click",saveOrder);
+
 async function logout(){await client.auth.signOut();location.reload()}
 (async()=>{try{const {data,error}=await client.auth.getSession();if(error)throw error;if(data.session)await start(data.session.user)}catch(e){console.error(e)}})();
 })();
