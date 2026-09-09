@@ -77,7 +77,7 @@ const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&
 function table(headers,rows){
  return `<table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>`+
  rows.map(r=>`<tr>${r.map((c,i)=>{
-   const isHtml=typeof c==="string" && /<(button|a)\\b/i.test(c);
+   const isHtml=typeof c==="string" && /<(button|a)\b/i.test(c);
    return `<td>${isHtml ? c : esc(c)}</td>`;
  }).join("")}</tr>`).join("")+
  `</tbody></table>`;
