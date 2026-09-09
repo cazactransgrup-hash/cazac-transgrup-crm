@@ -6,32 +6,41 @@
 <title>Cazac TransGrup CRM</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-body{margin:0;font-family:Arial;background:#f4f6fa;color:#172033}.box{max-width:420px;margin:12vh auto;background:#fff;padding:30px;border-radius:16px;box-shadow:0 10px 35px #0002}input,button{width:100%;padding:12px;margin:7px 0;border-radius:8px;box-sizing:border-box}input{border:1px solid #ccd2dc}button{border:0;background:#2563eb;color:#fff;font-weight:700;cursor:pointer}.app{display:none}.side{position:fixed;top:0;bottom:0;width:220px;background:#111827;color:#fff;padding:20px}.side button{background:transparent;text-align:left}.main{margin-left:260px;padding:25px}.cards{display:flex;gap:15px;flex-wrap:wrap}.card{background:#fff;padding:20px;border-radius:12px;min-width:150px}.card b{font-size:28px;display:block;margin-top:8px}section{display:none}section.on{display:block}.table{background:#fff;padding:18px;border-radius:12px;margin-top:18px;overflow:auto}table{width:100%;border-collapse:collapse}td,th{padding:10px;border-bottom:1px solid #eee;text-align:left;white-space:nowrap}.err{color:#b42318}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6fa;color:#172033}
+button,input{font:inherit}button{cursor:pointer}.login{min-height:100vh;display:grid;place-items:center;background:#eef3f9}
+.box{width:min(420px,92vw);background:#fff;padding:30px;border-radius:16px;box-shadow:0 12px 40px #0002}
+input{width:100%;padding:12px;margin:7px 0 15px;border:1px solid #ccd2dc;border-radius:8px}
+.btn{width:100%;padding:12px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:700}
+.error{display:none;background:#fff1f0;color:#b42318;padding:10px;border-radius:8px;margin-bottom:12px}
+.app{display:none}.side{position:fixed;top:0;bottom:0;width:225px;background:#111827;color:#fff;padding:20px}.side button{display:block;background:transparent;color:#fff;border:0;width:100%;padding:12px;text-align:left;border-radius:8px}.side button:hover{background:#1f2937}
+.main{margin-left:225px;padding:25px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}.card,.table{background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 10px #0000000a}.card b{display:block;font-size:28px;margin-top:8px}section{display:none}section.on{display:block}.table{margin-top:18px;overflow:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #eee;white-space:nowrap}
+@media(max-width:800px){.side{width:65px;padding:10px}.side h2{font-size:0}.side h2:after{content:"CTG";font-size:18px}.side button{font-size:0;text-align:center}.side button:before{content:"•";font-size:20px}.main{margin-left:65px;padding:15px}.cards{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
-<div id="login" class="box">
-<h2>Cazac TransGrup</h2><p>CRM Curierat — Admin</p>
-<div id="err" class="err"></div>
-<input id="email" type="email" placeholder="Email">
-<input id="pass" type="password" placeholder="Parolă">
-<button onclick="login()">Intră în CRM</button>
-</div>
+<div id="login" class="login">
+<div class="box">
+<h2>Cazac TransGrup</h2><p>CRM Curierat — Autentificare Admin</p>
+<div id="error" class="error"></div>
+<label>Email</label><input id="emailInput" type="email" autocomplete="username" placeholder="Email">
+<label>Parolă</label><input id="passwordInput" type="password" autocomplete="current-password" placeholder="Parolă">
+<button id="loginBtn" class="btn">Intră în CRM</button>
+</div></div>
 
 <div id="app" class="app">
 <aside class="side"><h2>CTG CRM</h2>
-<button onclick="go('dash')">📊 Dashboard</button>
-<button onclick="go('orders')">📦 Comenzi</button>
-<button onclick="go('clients')">👥 Clienți</button>
-<button onclick="go('drivers')">🚚 Șoferi</button>
-<button onclick="go('vehicles')">🚐 Vehicule</button>
-<button onclick="logout()">Ieșire</button>
+<button onclick="showSection('dashboard')">📊 Dashboard</button>
+<button onclick="showSection('orders')">📦 Comenzi</button>
+<button onclick="showSection('clients')">👥 Clienți</button>
+<button onclick="showSection('drivers')">🚚 Șoferi</button>
+<button onclick="showSection('vehicles')">🚐 Vehicule</button>
+<button onclick="logout()">↩ Ieșire</button>
 </aside>
 <main class="main">
-<section id="dash" class="on"><h2>Dashboard</h2><div class="cards">
-<div class="card">Comenzi<b id="n1">0</b></div><div class="card">Livrate<b id="n2">0</b></div>
-<div class="card">Șoferi<b id="n3">0</b></div><div class="card">Vehicule<b id="n4">0</b></div></div>
-<div class="table" id="recent"></div></section>
+<section id="dashboard" class="on"><h2>Dashboard</h2><div class="cards">
+<div class="card">Comenzi<b id="ordersCount">0</b></div><div class="card">Livrate<b id="deliveredCount">0</b></div>
+<div class="card">Șoferi<b id="driversCount">0</b></div><div class="card">Vehicule<b id="vehiclesCount">0</b></div>
+</div><div class="table" id="recent"></div></section>
 <section id="orders"><h2>Comenzi</h2><div class="table" id="ordersTable"></div></section>
 <section id="clients"><h2>Clienți</h2><div class="table" id="clientsTable"></div></section>
 <section id="drivers"><h2>Șoferi</h2><div class="table" id="driversTable"></div></section>
@@ -39,42 +48,67 @@ body{margin:0;font-family:Arial;background:#f4f6fa;color:#172033}.box{max-width:
 </main></div>
 
 <script>
-const URL="https://vroqxrcuqgwhmnacenfo.supabase.co";
-const KEY="sb_publishable_vVvOwJ7rNnCBKqdTjGd5Tw_QozYFQye";
-const db=supabase.createClient(URL,KEY);
-let O=[],C=[],D=[],V=[];
+(function(){
+"use strict";
+const SUPABASE_URL="https://vroqxrcuqgwhmnacenfo.supabase.co";
+const SUPABASE_KEY="sb_publishable_vVvOwJ7rNnCBKqdTjGd5Tw_QozYFQye";
+const client=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let orders=[],clients=[],drivers=[],vehicles=[];
+
+const $=id=>document.getElementById(id);
+function message(text){$("error").textContent=text;$("error").style.display="block"}
+function clearMessage(){$("error").style.display="none";$("error").textContent=""}
+
 async function login(){
- const {data,error}=await db.auth.signInWithPassword({email:email.value.trim(),password:pass.value});
- if(error){document.getElementById("err").textContent=error.message;return}
- start(data.user);
+ clearMessage();
+ const email=$("emailInput").value.trim();
+ const password=$("passwordInput").value;
+ if(!email||!password){message("Introdu emailul și parola.");return}
+ $("loginBtn").disabled=true;$("loginBtn").textContent="Se conectează...";
+ try{
+  const result=await client.auth.signInWithPassword({email,password});
+  if(result.error) throw result.error;
+  await start(result.data.user);
+ }catch(e){message(e.message||"Autentificarea a eșuat.");}
+ finally{$("loginBtn").disabled=false;$("loginBtn").textContent="Intră în CRM";}
 }
+$("loginBtn").addEventListener("click",login);
+$("passwordInput").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
+
 async function start(user){
- document.getElementById("login").style.display="none";
- document.getElementById("app").style.display="block";
- await load();
+ $("login").style.display="none";$("app").style.display="block";
+ await loadData();
 }
-async function load(){
- const [o,c,d,v]=await Promise.all([
- db.from("orders").select("*").order("id",{ascending:false}),
- db.from("clients").select("*").order("id",{ascending:false}),
- db.from("drivers").select("*").order("id",{ascending:false}),
- db.from("vehicles").select("*").order("id",{ascending:false})
- ]);
- O=o.data||[];C=c.data||[];D=d.data||[];V=v.data||[];
- render();
+async function loadData(){
+ try{
+  const results=await Promise.all([
+   client.from("orders").select("*").order("id",{ascending:false}),
+   client.from("clients").select("*").order("id",{ascending:false}),
+   client.from("drivers").select("*").order("id",{ascending:false}),
+   client.from("vehicles").select("*").order("id",{ascending:false})
+  ]);
+  const [o,c,d,v]=results;
+  if(o.error)throw o.error;if(c.error)throw c.error;if(d.error)throw d.error;if(v.error)throw v.error;
+  orders=o.data||[];clients=c.data||[];drivers=d.data||[];vehicles=v.data||[];
+  render();
+ }catch(e){console.error(e);alert("Login reușit, dar nu pot citi datele CRM: "+(e.message||e))}
 }
-function go(id){document.querySelectorAll("section").forEach(x=>x.classList.remove("on"));document.getElementById(id).classList.add("on")}
-function esc(x){return String(x??"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]))}
-function tbl(h,rows){if(!rows.length)return"<p>Nu există date.</p>";return"<table><tr>"+h.map(x=>"<th>"+x+"</th>").join("")+"</tr>"+rows.map(r=>"<tr>"+r.map(x=>"<td>"+esc(x)+"</td>").join("")+"</tr>").join("")+"</table>"}
+function showSection(id){document.querySelectorAll("section").forEach(s=>s.classList.remove("on"));$(id).classList.add("on")}
+function esc(x){return String(x==null?"":x).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
+function table(headers,rows){if(!rows.length)return"<p>Nu există date.</p>";return"<table><thead><tr>"+headers.map(h=>"<th>"+esc(h)+"</th>").join("")+"</tr></thead><tbody>"+rows.map(r=>"<tr>"+r.map(x=>"<td>"+esc(x)+"</td>").join("")+"</tr>").join("")+"</tbody></table>"}
 function render(){
- n1.textContent=O.length;n2.textContent=O.filter(x=>String(x.status).toLowerCase().startsWith("livrat")).length;n3.textContent=D.length;n4.textContent=V.length;
- ordersTable.innerHTML=tbl(["Cod","Client","Destinatar","Adresă","Șofer","Cash","Status"],O.map(x=>[x.code,C.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,D.find(d=>d.id===x.driver_id)?.name||"—",x.cash,x.status]));
- clientsTable.innerHTML=tbl(["ID","Nume","Telefon","Tarif"],C.map(x=>[x.id,x.name,x.phone,x.tariff]));
- driversTable.innerHTML=tbl(["ID","Nume","Telefon"],D.map(x=>[x.id,x.name,x.phone]));
- vehiclesTable.innerHTML=tbl(["ID","Nr.","Model","Șofer","Consum"],V.map(x=>[x.id,x.plate||x.registration_number,x.model,D.find(d=>d.id===x.driver_id)?.name||"—",x.fuel_consumption]));
- recent.innerHTML="<h3>Ultimele comenzi</h3>"+tbl(["Cod","Destinatar","Status"],O.slice(0,8).map(x=>[x.code,x.recipient,x.status]));
+ $("ordersCount").textContent=orders.length;
+ $("deliveredCount").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
+ $("driversCount").textContent=drivers.length;$("vehiclesCount").textContent=vehicles.length;
+ $("ordersTable").innerHTML=table(["Cod","Client","Destinatar","Adresă","Șofer","Cash","Status"],orders.map(x=>[
+ x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.cash,x.status]));
+ $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
+ $("driversTable").innerHTML=table(["ID","Nume","Telefon"],drivers.map(x=>[x.id,x.name,x.phone]));
+ $("vehiclesTable").innerHTML=table(["ID","Număr","Model","Șofer","Consum"],vehicles.map(x=>[x.id,x.plate||x.registration_number,x.model,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.fuel_consumption]));
+ $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["Cod","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code,x.recipient,x.status]));
 }
-async function logout(){await db.auth.signOut();location.reload()}
-(async()=>{const {data}=await db.auth.getSession();if(data.session)start(data.session.user)})();
+async function logout(){await client.auth.signOut();location.reload()}
+(async()=>{try{const {data,error}=await client.auth.getSession();if(error)throw error;if(data.session)await start(data.session.user)}catch(e){console.error(e)}})();
+})();
 </script>
 </body></html>
