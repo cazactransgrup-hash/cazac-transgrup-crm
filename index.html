@@ -159,7 +159,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 </div>
 </section>
 
-<section id="vehicles"><h2>Vehicule</h2><div class="panel" id="vehiclesTable"></div></section>
+<section id="vehicles"><h2>🚐 Mașini</h2><div class="cards" id="vehicleCards"></div><div class="panel" id="vehiclesTable"><p style="padding:12px">Se încarcă automobilele...</p></div></section>
 </main></div>
 
 <script>
@@ -178,7 +178,7 @@ function table(headers,rows){
  }).join("")}</tr>`).join("")+
  `</tbody></table>`;
 }
-function show(id){document.querySelectorAll("section").forEach(s=>s.classList.remove("on"));$(id).classList.add("on");if(id==="orders")fillSelects()}
+function show(id){document.querySelectorAll("section").forEach(s=>s.classList.remove("on"));const sec=$(id);if(!sec)return;sec.classList.add("on");if(id==="orders")fillSelects();if(id==="vehicles")renderVehicles();}
 function toggleForm(){$("orderForm").classList.toggle("show");if($("orderForm").classList.contains("show"))fillSelects()}
 function fillSelects(){
  $("clientSel").innerHTML=clients.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
@@ -205,7 +205,7 @@ async function load(){
   db.from("orders").select("*").order("id",{ascending:false}),
   db.from("clients").select("*").order("id",{ascending:false}),
   db.from("drivers").select("*").order("id",{ascending:false}),
-  db.from("vehicles").select("*").order("id",{ascending:false}),
+  db.from("vehicles").select("*").order("id",{ascending:true}),
   db.from("fuel_logs").select("*").order("date",{ascending:false}),
   db.from("expenses").select("*").order("date",{ascending:false})
  ]);
@@ -275,7 +275,7 @@ function renderReport(){
  );
 }
 function fillFuelSelects(){
- $("fuelVehicle").innerHTML=vehicles.map(v=>`<option value="${v.id}">${esc(v.plate||v.registration_number||"Vehicul "+v.id)} — ${esc(v.model||"")}</option>`).join("");
+ $("fuelVehicle").innerHTML=vehicles.map(v=>`<option value="${v.id}">${esc(v.plate||v.plate_number||v.registration_number||"Vehicul "+v.id)} — ${esc(v.model||"")}</option>`).join("");
  $("fuelDriver").innerHTML=drivers.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join("");
  const now=new Date();
  if(!$("fuelDate").value) $("fuelDate").value=localDateInput(now);
@@ -317,7 +317,7 @@ function renderFuel(){
 }
 function fillExpenseSelects(){
  const vsel=$("expenseVehicle"), dsel=$("expenseDriver");
- if(vsel) vsel.innerHTML='<option value="">Fără vehicul</option>'+vehicles.map(v=>`<option value="${v.id}">${esc(v.plate||v.registration_number||"Vehicul "+v.id)} — ${esc(v.model||"")}</option>`).join("");
+ if(vsel) vsel.innerHTML='<option value="">Fără vehicul</option>'+vehicles.map(v=>`<option value="${v.id}">${esc(v.plate||v.plate_number||v.registration_number||"Vehicul "+v.id)} — ${esc(v.model||"")}</option>`).join("");
  if(dsel) dsel.innerHTML='<option value="">Fără șofer</option>'+drivers.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join("");
  const now=new Date(); if($("expenseDate")&&!$("expenseDate").value) $("expenseDate").value=localDateInput(now);
 }
@@ -347,6 +347,13 @@ function getProfitStats(orderSet, fuelSet, expenseSet){
  const other=expenseSet.reduce((a,x)=>a+Number(x.amount||0),0);
  return {revenue,fuel,other,totalExpenses:fuel+other,profit:revenue-fuel-other};
 }
+function renderVehicles(){
+ const box=$("vehiclesTable"), cards=$("vehicleCards");
+ if(!box)return;
+ if(!vehicles.length){cards.innerHTML="";box.innerHTML="<p style='padding:12px'>Nu există automobile înregistrate în Supabase.</p>";return;}
+ cards.innerHTML=vehicles.map(v=>{const driver=drivers.find(d=>Number(d.id)===Number(v.driver_id));return `<div class="card"><div style="font-size:20px;font-weight:700">🚐 ${esc(v.plate||v.plate_number||v.registration_number||"Vehicul "+v.id)}</div><div>${esc(v.model||"Dacia Dokker")}</div><small>Șofer: ${esc(driver?.name||"Fără șofer")} · Consum: ${Number(v.fuel_consumption ?? 7).toFixed(2)} L/100 km · Km/lună: ${Number(v.monthly_km||0).toFixed(0)}</small></div>`;}).join("");
+ box.innerHTML=table(["ID","Număr","Model","Șofer","Km start","Km final","Km/lună","Consum"],vehicles.map(v=>{const driver=drivers.find(d=>Number(d.id)===Number(v.driver_id));const start=Number(v.start_km||0),end=Number(v.end_km||0),monthly=Number(v.monthly_km||Math.max(0,end-start));return [v.id,v.plate||v.registration_number||"—",v.model||"—",driver?.name||"—",start.toFixed(1),end.toFixed(1),monthly.toFixed(1),Number(v.fuel_consumption ?? 7).toFixed(2)+" L/100 km"]; }));
+}
 function render(){
  $("cntOrders").textContent=orders.length;
  $("cntDelivered").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
@@ -363,7 +370,7 @@ function render(){
  : "—"]));
  $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
  $("driversTable").innerHTML=table(["ID","Nume","Telefon"],drivers.map(x=>[x.id,x.name,x.phone]));
- $("vehiclesTable").innerHTML=table(["ID","Număr","Model","Șofer","Consum"],vehicles.map(x=>[x.id,x.plate||x.registration_number,x.model,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.fuel_consumption]));
+ renderVehicles();
 
  const profit=getProfitStats(orders,fuelLogs,expenses);
  $("finRevenue").textContent=profit.revenue.toFixed(2)+" lei";
