@@ -7,156 +7,126 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6fa;color:#172033}
-button,input{font:inherit}button{cursor:pointer}.login{min-height:100vh;display:grid;place-items:center;background:#eef3f9}
-.box{width:min(420px,92vw);background:#fff;padding:30px;border-radius:16px;box-shadow:0 12px 40px #0002}
-input,select{width:100%;padding:12px;margin:7px 0 15px;border:1px solid #ccd2dc;border-radius:8px}
-.btn{width:100%;padding:12px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:700}
-.error{display:none;background:#fff1f0;color:#b42318;padding:10px;border-radius:8px;margin-bottom:12px}
+button,input,select{font:inherit}button{cursor:pointer}
+.login{min-height:100vh;display:grid;place-items:center;background:#eef3f9}.box{width:min(420px,92vw);background:#fff;padding:30px;border-radius:16px;box-shadow:0 12px 40px #0002}
+input,select{width:100%;padding:12px;margin:7px 0 14px;border:1px solid #ccd2dc;border-radius:8px;background:#fff}.btn{padding:12px 18px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:700}.error{display:none;background:#fff1f0;color:#b42318;padding:10px;border-radius:8px;margin-bottom:12px}
 .app{display:none}.side{position:fixed;top:0;bottom:0;width:225px;background:#111827;color:#fff;padding:20px}.side button{display:block;background:transparent;color:#fff;border:0;width:100%;padding:12px;text-align:left;border-radius:8px}.side button:hover{background:#1f2937}
-.main{margin-left:225px;padding:25px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}.card,.table{background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 10px #0000000a}.card b{display:block;font-size:28px;margin-top:8px}section{display:none}section.on{display:block}.table{margin-top:18px;overflow:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #eee;white-space:nowrap}
-@media(max-width:800px){.side{width:65px;padding:10px}.side h2{font-size:0}.side h2:after{content:"CTG";font-size:18px}.side button{font-size:0;text-align:center}.side button:before{content:"•";font-size:20px}.main{margin-left:65px;padding:15px}.cards{grid-template-columns:repeat(2,1fr)}}
+.main{margin-left:225px;padding:25px}section{display:none}section.on{display:block}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}.card,.panel{background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 10px #0000000a}.card b{display:block;font-size:28px;margin-top:8px}.panel{margin-top:18px;overflow:auto}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #eee;white-space:nowrap}
+.order-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.form{display:none;margin-top:15px;padding:18px;background:#f8fafc;border-radius:10px}.form.show{display:block}.formgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.actions{display:flex;gap:10px}.secondary{background:#64748b}.success{color:#067647;background:#ecfdf3;padding:10px;border-radius:8px;display:none;margin-bottom:12px}
+@media(max-width:800px){.side{width:65px;padding:10px}.side h2{font-size:0}.side h2:after{content:"CTG";font-size:18px}.side button{font-size:0;text-align:center}.side button:before{content:"•";font-size:20px}.main{margin-left:65px;padding:15px}.cards{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<div id="login" class="login">
-<div class="box">
-<h2>Cazac TransGrup</h2><p>CRM Curierat — Autentificare Admin</p>
-<div id="error" class="error"></div>
-<label>Email</label><input id="emailInput" type="email" autocomplete="username" placeholder="Email">
-<label>Parolă</label><input id="passwordInput" type="password" autocomplete="current-password" placeholder="Parolă">
-<button id="loginBtn" class="btn">Intră în CRM</button>
+<div id="login" class="login"><div class="box">
+<h2>Cazac TransGrup</h2><p>CRM Curierat — Admin</p>
+<div id="loginError" class="error"></div>
+<label>Email</label><input id="emailInput" type="email" autocomplete="username">
+<label>Parolă</label><input id="passwordInput" type="password" autocomplete="current-password">
+<button id="loginBtn" class="btn" style="width:100%">Intră în CRM</button>
 </div></div>
 
 <div id="app" class="app">
 <aside class="side"><h2>CTG CRM</h2>
-<button onclick="showSection('dashboard')">📊 Dashboard</button>
-<button onclick="showSection('orders')">📦 Comenzi</button>
-<button onclick="showSection('clients')">👥 Clienți</button>
-<button onclick="showSection('drivers')">🚚 Șoferi</button>
-<button onclick="showSection('vehicles')">🚐 Vehicule</button>
+<button onclick="show('dashboard')">📊 Dashboard</button>
+<button onclick="show('orders')">📦 Comenzi</button>
+<button onclick="show('clients')">👥 Clienți</button>
+<button onclick="show('drivers')">🚚 Șoferi</button>
+<button onclick="show('vehicles')">🚐 Vehicule</button>
 <button onclick="logout()">↩ Ieșire</button>
 </aside>
 <main class="main">
 <section id="dashboard" class="on"><h2>Dashboard</h2><div class="cards">
-<div class="card">Comenzi<b id="ordersCount">0</b></div><div class="card">Livrate<b id="deliveredCount">0</b></div>
-<div class="card">Șoferi<b id="driversCount">0</b></div><div class="card">Vehicule<b id="vehiclesCount">0</b></div>
-</div><div class="table" id="recent"></div></section>
+<div class="card">Comenzi<b id="cntOrders">0</b></div><div class="card">Livrate<b id="cntDelivered">0</b></div>
+<div class="card">Șoferi<b id="cntDrivers">0</b></div><div class="card">Vehicule<b id="cntVehicles">0</b></div>
+</div><div class="panel" id="recent"></div></section>
+
 <section id="orders">
-<h2>Comenzi</h2>
-<div class="table">
+<div class="order-head"><h2>Comenzi</h2><button class="btn" onclick="toggleForm()">➕ Comandă nouă</button></div>
+<div id="orderForm" class="form">
 <h3>Comandă nouă</h3>
-<div id="orderError" class="error" style="display:none"></div>
-<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
-<div><label>Client</label><select id="oClient"></select></div>
-<div><label>Șofer</label><select id="oDriver"></select></div>
-<div><label>Destinatar</label><input id="oRecipient" placeholder="Nume destinatar"></div>
-<div><label>Telefon</label><input id="oPhone" placeholder="069..."></div>
-<div><label>Adresă</label><input id="oAddress" placeholder="Stradă, nr."></div>
-<div><label>Localitate</label><input id="oCity" value="Chișinău"></div>
-<div><label>Încasare (lei)</label><input id="oCash" type="number" value="0"></div>
-<div><label>Greutate (kg)</label><input id="oWeight" type="number" step="0.01" value="0"></div>
+<div id="orderSuccess" class="success"></div><div id="orderError" class="error"></div>
+<div class="formgrid">
+<div><label>Client</label><select id="clientSel"></select></div>
+<div><label>Șofer</label><select id="driverSel"></select></div>
+<div><label>Destinatar</label><input id="recipient" placeholder="Nume destinatar"></div>
+<div><label>Telefon</label><input id="phone" placeholder="069..."></div>
+<div><label>Adresă</label><input id="address" placeholder="Stradă, număr"></div>
+<div><label>Localitate</label><input id="city" value="Chișinău"></div>
+<div><label>Încasare (lei)</label><input id="cash" type="number" value="0"></div>
+<div><label>Greutate (kg)</label><input id="weight" type="number" step="0.01" value="0"></div>
 </div>
-<button id="saveOrder" class="btn" style="max-width:220px">Salvează comanda</button>
+<div class="actions"><button class="btn" onclick="saveOrder()">Salvează comanda</button><button class="btn secondary" onclick="toggleForm()">Închide</button></div>
 </div>
-<div class="table" id="ordersTable"></div>
+<div class="panel" id="ordersTable"></div>
 </section>
-<section id="clients"><h2>Clienți</h2><div class="table" id="clientsTable"></div></section>
-<section id="drivers"><h2>Șoferi</h2><div class="table" id="driversTable"></div></section>
-<section id="vehicles"><h2>Vehicule</h2><div class="table" id="vehiclesTable"></div></section>
+
+<section id="clients"><h2>Clienți</h2><div class="panel" id="clientsTable"></div></section>
+<section id="drivers"><h2>Șoferi</h2><div class="panel" id="driversTable"></div></section>
+<section id="vehicles"><h2>Vehicule</h2><div class="panel" id="vehiclesTable"></div></section>
 </main></div>
 
 <script>
-(function(){
 "use strict";
 const SUPABASE_URL="https://vroqxrcuqgwhmnacenfo.supabase.co";
 const SUPABASE_KEY="sb_publishable_vVvOwJ7rNnCBKqdTjGd5Tw_QozYFQye";
-const client=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let orders=[],clients=[],drivers=[],vehicles=[];
-
 const $=id=>document.getElementById(id);
-function message(text){$("error").textContent=text;$("error").style.display="block"}
-function clearMessage(){$("error").style.display="none";$("error").textContent=""}
-
+const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+function table(h,rows){if(!rows.length)return"<p>Nu există date.</p>";return"<table><thead><tr>"+h.map(x=>"<th>"+esc(x)+"</th>").join("")+"</tr></thead><tbody>"+rows.map(r=>"<tr>"+r.map(x=>"<td>"+esc(x)+"</td>").join("")+"</tr>").join("")+"</tbody></table>"}
+function show(id){document.querySelectorAll("section").forEach(s=>s.classList.remove("on"));$(id).classList.add("on");if(id==="orders")fillSelects()}
+function toggleForm(){$("orderForm").classList.toggle("show");if($("orderForm").classList.contains("show"))fillSelects()}
+function fillSelects(){
+ $("clientSel").innerHTML=clients.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
+ $("driverSel").innerHTML=drivers.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
+}
 async function login(){
- clearMessage();
- const email=$("emailInput").value.trim();
- const password=$("passwordInput").value;
- if(!email||!password){message("Introdu emailul și parola.");return}
- $("loginBtn").disabled=true;$("loginBtn").textContent="Se conectează...";
- try{
-  const result=await client.auth.signInWithPassword({email,password});
-  if(result.error) throw result.error;
-  await start(result.data.user);
- }catch(e){message(e.message||"Autentificarea a eșuat.");}
- finally{$("loginBtn").disabled=false;$("loginBtn").textContent="Intră în CRM";}
+ $("loginError").style.display="none";
+ const email=$("emailInput").value.trim(),password=$("passwordInput").value;
+ if(!email||!password){$("loginError").textContent="Introdu emailul și parola.";$("loginError").style.display="block";return}
+ $("loginBtn").disabled=true;
+ const {data,error}=await db.auth.signInWithPassword({email,password});
+ $("loginBtn").disabled=false;
+ if(error){$("loginError").textContent=error.message;$("loginError").style.display="block";return}
+ $("login").style.display="none";$("app").style.display="block";await load();
 }
-$("loginBtn").addEventListener("click",login);
-$("passwordInput").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
-
-async function start(user){
- $("login").style.display="none";$("app").style.display="block";
- await loadData();
+$("loginBtn").onclick=login;$("passwordInput").onkeydown=e=>{if(e.key==="Enter")login()};
+async function load(){
+ const [o,c,d,v]=await Promise.all([
+  db.from("orders").select("*").order("id",{ascending:false}),
+  db.from("clients").select("*").order("id",{ascending:false}),
+  db.from("drivers").select("*").order("id",{ascending:false}),
+  db.from("vehicles").select("*").order("id",{ascending:false})
+ ]);
+ if(o.error||c.error||d.error||v.error){console.error(o.error,c.error,d.error,v.error);alert("Eroare la citirea datelor din Supabase.");return}
+ orders=o.data||[];clients=c.data||[];drivers=d.data||[];vehicles=v.data||[];render();
 }
-async function loadData(){
- try{
-  const results=await Promise.all([
-   client.from("orders").select("*").order("id",{ascending:false}),
-   client.from("clients").select("*").order("id",{ascending:false}),
-   client.from("drivers").select("*").order("id",{ascending:false}),
-   client.from("vehicles").select("*").order("id",{ascending:false})
-  ]);
-  const [o,c,d,v]=results;
-  if(o.error)throw o.error;if(c.error)throw c.error;if(d.error)throw d.error;if(v.error)throw v.error;
-  orders=o.data||[];clients=c.data||[];drivers=d.data||[];vehicles=v.data||[];
-  render();
- }catch(e){console.error(e);alert("Login reușit, dar nu pot citi datele CRM: "+(e.message||e))}
-}
-function showSection(id){document.querySelectorAll("section").forEach(s=>s.classList.remove("on"));$(id).classList.add("on")}
-function esc(x){return String(x==null?"":x).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
-function table(headers,rows){if(!rows.length)return"<p>Nu există date.</p>";return"<table><thead><tr>"+headers.map(h=>"<th>"+esc(h)+"</th>").join("")+"</tr></thead><tbody>"+rows.map(r=>"<tr>"+r.map(x=>"<td>"+esc(x)+"</td>").join("")+"</tr>").join("")+"</tbody></table>"}
 function render(){
- fillOrderForm();
- $("ordersCount").textContent=orders.length;
- $("deliveredCount").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
- $("driversCount").textContent=drivers.length;$("vehiclesCount").textContent=vehicles.length;
- $("ordersTable").innerHTML=table(["Cod","Client","Destinatar","Adresă","Șofer","Cash","Status"],orders.map(x=>[
- x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.cash,x.status]));
+ $("cntOrders").textContent=orders.length;
+ $("cntDelivered").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
+ $("cntDrivers").textContent=drivers.length;$("cntVehicles").textContent=vehicles.length;
+ $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["Cod","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code,x.recipient,x.status]));
+ $("ordersTable").innerHTML=table(["Cod","Client","Destinatar","Adresă","Șofer","Cash","Greutate","Status"],orders.map(x=>[
+ x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.cash,x.weight,x.status]));
  $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
  $("driversTable").innerHTML=table(["ID","Nume","Telefon"],drivers.map(x=>[x.id,x.name,x.phone]));
  $("vehiclesTable").innerHTML=table(["ID","Număr","Model","Șofer","Consum"],vehicles.map(x=>[x.id,x.plate||x.registration_number,x.model,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.fuel_consumption]));
- $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["Cod","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code,x.recipient,x.status]));
-}
-
-function fillOrderForm(){
- const cs=$("oClient"), ds=$("oDriver");
- cs.innerHTML=clients.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
- ds.innerHTML=drivers.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
-}
-function showOrderError(text){
- const e=$("orderError"); e.textContent=text; e.style.display="block";
 }
 async function saveOrder(){
- const err=$("orderError"); err.style.display="none";
- const clientId=Number($("oClient").value), driverId=Number($("oDriver").value);
- const recipient=$("oRecipient").value.trim(), phone=$("oPhone").value.trim();
- const address=$("oAddress").value.trim(), city=$("oCity").value.trim() || "Chișinău";
- const cash=Number($("oCash").value||0), weight=Number($("oWeight").value||0);
- if(!clientId||!driverId||!recipient||!address){showOrderError("Completează Client, Șofer, Destinatar și Adresă.");return}
- const now=new Date(), y=String(now.getFullYear()).slice(-2), mo=String(now.getMonth()+1).padStart(2,"0"), da=String(now.getDate()).padStart(2,"0");
- const code=`CTG-${y}${mo}${da}-${String(Date.now()).slice(-6)}`;
- const {data,error}=await client.from("orders").insert({
-   code,client_id:clientId,recipient,phone,address,city,cash,weight,driver_id:driverId,status:"Nouă"
- }).select().single();
- if(error){showOrderError(error.message);return}
- $("oRecipient").value="";$("oPhone").value="";$("oAddress").value="";$("oCash").value="0";$("oWeight").value="0";
- await loadData();
- showSection("orders");
- alert("Comanda a fost salvată: "+data.code);
+ $("orderError").style.display="none";$("orderSuccess").style.display="none";
+ const client_id=Number($("clientSel").value),driver_id=Number($("driverSel").value);
+ const recipient=$("recipient").value.trim(),phone=$("phone").value.trim(),address=$("address").value.trim(),city=$("city").value.trim()||"Chișinău";
+ const cash=Number($("cash").value||0),weight=Number($("weight").value||0);
+ if(!client_id||!driver_id||!recipient||!address){$("orderError").textContent="Completează Client, Șofer, Destinatar și Adresă.";$("orderError").style.display="block";return}
+ const d=new Date(),code=`CTG-${String(d.getFullYear()).slice(-2)}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}-${String(Date.now()).slice(-6)}`;
+ const {error}=await db.from("orders").insert({code,client_id,recipient,phone,address,city,cash,weight,driver_id,status:"Nouă"});
+ if(error){$("orderError").textContent=error.message;$("orderError").style.display="block";return}
+ $("recipient").value="";$("phone").value="";$("address").value="";$("cash").value="0";$("weight").value="0";
+ $("orderSuccess").textContent="Comanda "+code+" a fost salvată."; $("orderSuccess").style.display="block";
+ await load();
 }
-$("saveOrder").addEventListener("click",saveOrder);
-
-async function logout(){await client.auth.signOut();location.reload()}
-(async()=>{try{const {data,error}=await client.auth.getSession();if(error)throw error;if(data.session)await start(data.session.user)}catch(e){console.error(e)}})();
-})();
+async function logout(){await db.auth.signOut();location.reload()}
+(async()=>{const {data}=await db.auth.getSession();if(data.session){$("login").style.display="none";$("app").style.display="block";await load()}})();
 </script>
 </body></html>
