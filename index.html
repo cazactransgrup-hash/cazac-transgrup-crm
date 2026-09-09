@@ -108,10 +108,18 @@ function render(){
  $("cntDrivers").textContent=drivers.length;$("cntVehicles").textContent=vehicles.length;
  $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["Cod","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code,x.recipient,x.status]));
  $("ordersTable").innerHTML=table(["Cod","Client","Destinatar","Adresă","Șofer","Cash","Greutate","Status"],orders.map(x=>[
- x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.cash,x.weight,x.status]));
+ x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.cash,x.weight,
+ `<select onchange="changeStatus(${x.id},this.value)" style="padding:7px;border:1px solid #ccd2dc;border-radius:7px">
+ ${["Nouă","Repartizată","Ridicată","În curs","Livrată","Nereușită"].map(s=>`<option value="${s}" ${x.status===s?"selected":""}>${s}</option>`).join("")}
+ </select>`]));
  $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
  $("driversTable").innerHTML=table(["ID","Nume","Telefon"],drivers.map(x=>[x.id,x.name,x.phone]));
  $("vehiclesTable").innerHTML=table(["ID","Număr","Model","Șofer","Consum"],vehicles.map(x=>[x.id,x.plate||x.registration_number,x.model,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.fuel_consumption]));
+}
+async function changeStatus(orderId,newStatus){
+ const {error}=await db.from("orders").update({status:newStatus}).eq("id",orderId);
+ if(error){alert("Nu s-a putut schimba statusul: "+error.message);return}
+ await load();
 }
 async function saveOrder(){
  $("orderError").style.display="none";$("orderSuccess").style.display="none";
