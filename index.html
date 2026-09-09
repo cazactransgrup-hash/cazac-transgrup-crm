@@ -34,6 +34,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <button onclick="show('drivers')">🚚 Șoferi</button>
 <button onclick="show('vehicles')">🚐 Vehicule</button>
 <button onclick="show('finance')">💰 Financiar</button>
+<button onclick="show('reports')">📊 Rapoarte</button>
 <button onclick="logout()">↩ Ieșire</button>
 </aside>
 <main class="main">
@@ -64,6 +65,31 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 
 <section id="clients"><h2>Clienți</h2><div class="panel" id="clientsTable"></div></section>
 <section id="drivers"><h2>Șoferi</h2><div class="panel" id="driversTable"></div></section>
+<section id="reports">
+<h2>📊 Rapoarte</h2>
+<div class="panel">
+<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+<div><label>De la</label><input type="date" id="reportFrom"></div>
+<div><label>Până la</label><input type="date" id="reportTo"></div>
+<button class="btn" onclick="setReportPeriod('today')">Azi</button>
+<button class="btn" onclick="setReportPeriod('week')">Săptămâna</button>
+<button class="btn" onclick="setReportPeriod('month')">Luna</button>
+<button class="btn" onclick="renderReport()">Aplică</button>
+</div>
+</div>
+<div class="cards">
+<div class="card">Comenzi<b id="repOrders">0</b></div>
+<div class="card">Livrate<b id="repDelivered">0</b></div>
+<div class="card">Nereușite<b id="repFailed">0</b></div>
+<div class="card">Încasat<b id="repPaid">0 lei</b></div>
+<div class="card">Neîncasat<b id="repUnpaid">0 lei</b></div>
+</div>
+<div class="panel">
+<h3>Detalii pe șofer</h3>
+<div id="reportDrivers"></div>
+</div>
+</section>
+
 <section id="finance">
 <h2>💰 Financiar</h2>
 <div class="cards">
@@ -127,7 +153,59 @@ async function load(){
   db.from("vehicles").select("*").order("id",{ascending:false})
  ]);
  if(o.error||c.error||d.error||v.error){console.error(o.error,c.error,d.error,v.error);alert("Eroare la citirea datelor din Supabase.");return}
- orders=o.data||[];clients=c.data||[];drivers=d.data||[];vehicles=v.data||[];render();
+ orders=o.data||[];clients=c.data||[];drivers=d.data||[];vehicles=v.data||[];
+ render();
+ if(!$("reportFrom").value){setReportPeriod("today");}
+}
+function localDateInput(d){
+ const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");
+ return `${y}-${m}-${day}`;
+}
+function setReportPeriod(type){
+ const now=new Date();
+ let from=new Date(now),to=new Date(now);
+ if(type==="week"){
+   const day=now.getDay()||7;
+   from.setDate(now.getDate()-day+1);
+ }else if(type==="month"){
+   from=new Date(now.getFullYear(),now.getMonth(),1);
+ }
+ $("reportFrom").value=localDateInput(from);
+ $("reportTo").value=localDateInput(to);
+ renderReport();
+}
+function renderReport(){
+ const from=$("reportFrom")?.value, to=$("reportTo")?.value;
+ if(!from||!to)return;
+ const start=new Date(from+"T00:00:00");
+ const end=new Date(to+"T23:59:59.999");
+ const rs=orders.filter(x=>{
+   const d=new Date(x.created_at);
+   return d>=start && d<=end;
+ });
+ const delivered=rs.filter(x=>String(x.status||"").toLowerCase()==="livrată").length;
+ const failed=rs.filter(x=>String(x.status||"").toLowerCase()==="nereușită").length;
+ const paid=rs.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat").reduce((a,x)=>a+Number(x.paid_amount||0),0);
+ const unpaid=rs.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0);
+ $("repOrders").textContent=rs.length;
+ $("repDelivered").textContent=delivered;
+ $("repFailed").textContent=failed;
+ $("repPaid").textContent=paid.toFixed(2)+" lei";
+ $("repUnpaid").textContent=unpaid.toFixed(2)+" lei";
+ $("reportDrivers").innerHTML=table(
+   ["Șofer","Comenzi","Livrate","Nereușite","Încasat","Neîncasat"],
+   drivers.map(d=>{
+     const ds=rs.filter(x=>Number(x.driver_id)===Number(d.id));
+     const pd=ds.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
+     return [
+       d.name, ds.length,
+       ds.filter(x=>String(x.status||"").toLowerCase()==="livrată").length,
+       ds.filter(x=>String(x.status||"").toLowerCase()==="nereușită").length,
+       pd.reduce((a,x)=>a+Number(x.paid_amount||0),0).toFixed(2)+" lei",
+       ds.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0).toFixed(2)+" lei"
+     ];
+   })
+ );
 }
 function render(){
  $("cntOrders").textContent=orders.length;
