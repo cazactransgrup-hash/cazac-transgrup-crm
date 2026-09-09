@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cazac TransGrup CRM</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6fa;color:#172033}
 button,input,select{font:inherit}button{cursor:pointer}
@@ -46,7 +47,12 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 </div><div class="panel" id="recent"></div></section>
 
 <section id="orders">
-<div class="order-head"><h2>Comenzi</h2><button class="btn" onclick="toggleForm()">➕ Comandă nouă</button></div>
+<div class="order-head"><h2>Comenzi</h2><div class="actions"><button class="btn" onclick="toggleForm()">➕ Comandă nouă</button><button class="btn secondary" onclick="document.getElementById('excelOrdersInput').click()">📥 Import Excel</button><input id="excelOrdersInput" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importOrdersExcel(event)"></div></div>
+<div id="excelImportBox" class="form">
+<h3>📥 Import comenzi din Excel</h3>
+<p style="margin-top:0">Coloane recomandate: <b>Cod</b>, <b>Client</b>, <b>Destinatar</b>, <b>Telefon</b>, <b>Adresă</b>, <b>Localitate</b>, <b>Ramburs</b>, <b>Greutate</b>, <b>Șofer</b>. Codul poate lipsi și va fi generat automat.</p>
+<div id="excelImportStatus" class="success"></div><div id="excelImportError" class="error"></div>
+</div>
 <div id="orderForm" class="form">
 <h3>Comandă nouă</h3>
 <div id="orderSuccess" class="success"></div><div id="orderError" class="error"></div>
@@ -470,6 +476,42 @@ async function driverFailed(orderId){
  if(error){alert("Eroare: "+error.message);return}
  await load();
 }
+
+function normText(v){return String(v??"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");}
+function pickCell(row,aliases){const keys=Object.keys(row);for(const a of aliases){const n=normText(a);const k=keys.find(x=>normText(x)===n);if(k!==undefined)return row[k];}for(const a of aliases){const n=normText(a);const k=keys.find(x=>normText(x).includes(n));if(k!==undefined)return row[k];}return "";}
+function makeOrderCode(){const d=new Date();return `CTG-${String(d.getFullYear()).slice(-2)}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}-${String(Date.now()).slice(-6)}${Math.floor(Math.random()*90+10)}`;}
+async function importOrdersExcel(event){
+ const file=event.target.files?.[0]; event.target.value=""; if(!file)return;
+ const box=$("excelImportBox"), ok=$("excelImportStatus"), err=$("excelImportError"); box.classList.add("show"); ok.style.display="none"; err.style.display="none";
+ try{
+  const data=await file.arrayBuffer(); const wb=XLSX.read(data,{type:"array"}); const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{defval:""}); if(!rows.length)throw new Error("Fișierul Excel nu conține rânduri de comenzi.");
+  const clientMap=new Map(clients.map(c=>[normText(c.name),c])); const driverMap=new Map(drivers.map(d=>[normText(d.name),d]));
+  const valid=[], problems=[];
+  rows.forEach((r,i)=>{
+   const clientName=String(pickCell(r,["Client","Nume client","Expeditor","Beneficiar"])).trim();
+   const recipient=String(pickCell(r,["Destinatar","Recipient","Nume destinatar"])).trim();
+   const address=String(pickCell(r,["Adresă","Adresa","Address"])).trim();
+   const phone=String(pickCell(r,["Telefon","Phone","Tel"])).trim();
+   const city=String(pickCell(r,["Localitate","Oraș","Oras","City"])||"Chișinău").trim();
+   const driverName=String(pickCell(r,["Șofer","Sofer","Driver","Curier"])).trim();
+   const code=String(pickCell(r,["Cod","Cod colet","Tracking No","AWB","Code"])).trim()||makeOrderCode();
+   const cash=Number(String(pickCell(r,["Ramburs","Cash","Încasare","Incasare"])).replace(/[^0-9,.-]/g,"").replace(",",".")||0);
+   const weight=Number(String(pickCell(r,["Greutate","Weight"])).replace(/[^0-9,.-]/g,"").replace(",",".")||0);
+   const client=clientMap.get(normText(clientName)); const driver=driverMap.get(normText(driverName));
+   if(!clientName||!client){problems.push(`Rândul ${i+2}: clientul „${clientName||"(lipsă)"}” nu există în CRM.`);return}
+   if(!recipient||!address){problems.push(`Rândul ${i+2}: lipsesc Destinatar sau Adresă.`);return}
+   if(!driverName||!driver){problems.push(`Rândul ${i+2}: șoferul „${driverName||"(lipsă)"}” nu există în CRM.`);return}
+   valid.push({code,client_id:client.id,recipient,phone,address,city,cash:Number.isFinite(cash)?cash:0,weight:Number.isFinite(weight)?weight:0,driver_id:driver.id,status:"Nouă"});
+  });
+  if(!valid.length)throw new Error("Nu există rânduri valide pentru import. Verifică numele clienților și șoferilor din Excel.");
+  const {error}=await db.from("orders").insert(valid); if(error)throw error;
+  ok.textContent=`Import finalizat: ${valid.length} comenzi adăugate.`+(problems.length?` ${problems.length} rânduri ignorate.`:""); ok.style.display="block";
+  if(problems.length){err.innerHTML="<b>Rânduri ignorate:</b><br>"+problems.map(esc).join("<br>");err.style.display="block";}
+  await load();
+ }catch(e){err.textContent="Eroare la import: "+(e?.message||e);err.style.display="block";}
+}
+
 async function saveOrder(){
  $("orderError").style.display="none";$("orderSuccess").style.display="none";
  const client_id=Number($("clientSel").value),driver_id=Number($("driverSel").value);
