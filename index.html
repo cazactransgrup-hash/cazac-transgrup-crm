@@ -85,7 +85,10 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <div class="card">Total litri<b id="fuelTotalLiters">0</b></div>
 <div class="card">Cost combustibil<b id="fuelTotalCost">0 lei</b></div>
 </div>
-<div class="panel"><h3>Alimentări</h3><div id="fuelTable"></div></div>
+<div class="panel" style="display:block">
+<h3>📋 Alimentări înregistrate</h3>
+<div id="fuelTable" style="overflow-x:auto;min-height:60px"></div>
+</div>
 </section>
 
 <section id="reports">
@@ -260,7 +263,8 @@ function renderFuel(){
  const totalCost=fuelLogs.reduce((a,x)=>a+Number(x.total_cost||Number(x.liters||0)*Number(x.price_per_liter||0)),0);
  $("fuelTotalLiters").textContent=totalLiters.toFixed(2)+" L";
  $("fuelTotalCost").textContent=totalCost.toFixed(2)+" lei";
- $("fuelTable").innerHTML=table(["Data","Vehicul","Șofer","Litri","Preț/L","Cost","Km","Observații"],fuelLogs.map(x=>[
+ $("fuelTable").innerHTML=fuelLogs.length
+ ? table(["Data","Vehicul","Șofer","Litri","Preț/L","Cost","Km","Observații"],fuelLogs.map(x=>[
    new Date(x.date).toLocaleDateString("ro-RO"),
    vehicles.find(v=>Number(v.id)===Number(x.vehicle_id))?.plate||("ID "+x.vehicle_id),
    drivers.find(d=>Number(d.id)===Number(x.driver_id))?.name||("ID "+x.driver_id),
@@ -269,7 +273,8 @@ function renderFuel(){
    Number(x.total_cost||Number(x.liters||0)*Number(x.price_per_liter||0)).toFixed(2)+" lei",
    Number(x.odometer||0).toFixed(1),
    x.notes||"—"
- ]));
+ ]))
+ : "<p style='padding:12px'>Nu există încă alimentări înregistrate.</p>";
 }
 function render(){
  $("cntOrders").textContent=orders.length;
