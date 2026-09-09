@@ -116,12 +116,14 @@ function render(){
  $("cntDelivered").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
  $("cntDrivers").textContent=drivers.length;$("cntVehicles").textContent=vehicles.length;
  $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["Cod","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code,x.recipient,x.status]));
- $("ordersTable").innerHTML=table(["Cod","Client","Destinatar","Adresă","Șofer","Cash","Greutate","Status","Motiv","Poză","Acțiuni"],orders.map(x=>[
+ $("ordersTable").innerHTML=table(["Cod","Client","Destinatar","Adresă","Șofer","Cash","Greutate","Status","Motiv","Poză","Plată","Metodă","Acțiuni"],orders.map(x=>[
  x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.cash,x.weight,x.status,
  x.failure_reason||"—",
  x.proof_photo_url ? `<a href="${esc(x.proof_photo_url)}" target="_blank">📷 Vezi</a>` : "—",
+ x.payment_status||"Neîncasat",
+ x.payment_method||"—",
  currentProfile?.role==="driver"
- ? `<button class="btn" style="padding:7px 10px;margin-right:5px;background:#0f766e" onclick="navigateToOrder(${x.id})">📍 Navigare</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="takeDeliveryPhoto(${x.id})">📷 Poză</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="driverDelivered(${x.id})">Livrată</button><button class="btn" style="padding:7px 10px;background:#dc2626" onclick="driverFailed(${x.id})">Nereușită</button>`
+ ? `<button class="btn" style="padding:7px 10px;margin-right:5px;background:#0f766e" onclick="navigateToOrder(${x.id})">📍 Navigare</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="takeDeliveryPhoto(${x.id})">📷 Poză</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="driverDelivered(${x.id})">Livrată</button><button class="btn" style="padding:7px 10px;margin-right:5px;background:#16a34a" onclick="markPaid(${x.id})">💰 Încasat</button><button class="btn" style="padding:7px 10px;margin-right:5px;background:#6b7280" onclick="markUnpaid(${x.id})">❌ Neîncasat</button><button class="btn" style="padding:7px 10px;background:#dc2626" onclick="driverFailed(${x.id})">Nereușită</button>`
  : "—"]));
  $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
  $("driversTable").innerHTML=table(["ID","Nume","Telefon"],drivers.map(x=>[x.id,x.name,x.phone]));
@@ -154,6 +156,34 @@ function takeDeliveryPhoto(orderId){
    alert("Poza a fost salvată.");
  };
  input.click();
+}
+async function markPaid(orderId){
+ const order=orders.find(x=>Number(x.id)===Number(orderId));
+ if(!order)return;
+ const amount=prompt("Suma încasată:", String(order.cash??0));
+ if(amount===null)return;
+ const paid=Number(amount.replace(",","."));
+ if(!Number.isFinite(paid)||paid<0){alert("Suma nu este validă.");return}
+ const method=prompt("Metoda de plată: Cash / Card / Transfer","Cash");
+ if(method===null)return;
+ const normalized=method.trim();
+ if(!normalized){alert("Introdu metoda de plată.");return}
+ const {error}=await db.from("orders").update({
+   payment_status:"Încasat",
+   payment_method:normalized,
+   paid_amount:paid
+ }).eq("id",orderId);
+ if(error){alert("Eroare la încasare: "+error.message);return}
+ await load();
+}
+async function markUnpaid(orderId){
+ const {error}=await db.from("orders").update({
+   payment_status:"Neîncasat",
+   payment_method:null,
+   paid_amount:0
+ }).eq("id",orderId);
+ if(error){alert("Eroare: "+error.message);return}
+ await load();
 }
 async function driverDelivered(orderId){
  const {error}=await db.from("orders").update({status:"Livrată"}).eq("id",orderId);
