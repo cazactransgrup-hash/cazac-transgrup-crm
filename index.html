@@ -36,6 +36,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <button onclick="show('finance')">💰 Financiar</button>
 <button onclick="show('reports')">📊 Rapoarte</button>
 <button onclick="show('fuel')">⛽ Combustibil</button>
+<button onclick="show('expenses')">💸 Cheltuieli</button>
 <button onclick="logout()">↩ Ieșire</button>
 </aside>
 <main class="main">
@@ -91,6 +92,30 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 </div>
 </section>
 
+<section id="expenses">
+<h2>💸 Cheltuieli</h2>
+<div class="panel">
+<h3>Adaugă cheltuială</h3>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+<div><label>Categorie</label><select id="expenseCategory"><option>Salarii</option><option>Combustibil</option><option>Reparații</option><option>Deservire auto</option><option>Asigurare</option><option>Chirie</option><option>Telefon / Internet</option><option>Alte cheltuieli</option></select></div>
+<div><label>Sumă (lei)</label><input type="number" step="0.01" id="expenseAmount" placeholder="0"></div>
+<div><label>Data</label><input type="date" id="expenseDate"></div>
+<div><label>Vehicul</label><select id="expenseVehicle"><option value="">Fără vehicul</option></select></div>
+<div><label>Șofer</label><select id="expenseDriver"><option value="">Fără șofer</option></select></div>
+</div>
+<div><label>Descriere</label><input id="expenseDescription" placeholder="Ex.: salariu luna septembrie"></div>
+<div><label>Observații</label><input id="expenseNotes" placeholder="Opțional"></div>
+<button class="btn" onclick="addExpense()">➕ Salvează cheltuiala</button>
+</div>
+<div class="cards">
+<div class="card">Total cheltuieli<b id="expenseTotal">0 lei</b></div>
+<div class="card">Salarii<b id="expenseSalaries">0 lei</b></div>
+<div class="card">Reparații / auto<b id="expenseAuto">0 lei</b></div>
+<div class="card">Alte cheltuieli<b id="expenseOther">0 lei</b></div>
+</div>
+<div class="panel"><h3>📋 Cheltuieli înregistrate</h3><div id="expensesTable" style="overflow-x:auto;min-height:60px"></div></div>
+</section>
+
 <section id="reports">
 <h2>📊 Rapoarte</h2>
 <div class="panel">
@@ -109,6 +134,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <div class="card">Nereușite<b id="repFailed">0</b></div>
 <div class="card">Încasat<b id="repPaid">0 lei</b></div>
 <div class="card">Neîncasat<b id="repUnpaid">0 lei</b></div>
+<div class="card">Profit net<b id="repProfit">0 lei</b></div>
 </div>
 <div class="panel">
 <h3>Detalii pe șofer</h3>
@@ -119,6 +145,9 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <section id="finance">
 <h2>💰 Financiar</h2>
 <div class="cards">
+<div class="card">Venit din livrări<b id="finRevenue">0 lei</b></div>
+<div class="card">Cheltuieli totale<b id="finExpenses">0 lei</b></div>
+<div class="card">Profit net<b id="finProfit">0 lei</b></div>
 <div class="card">Total încasat<b id="finPaid">0 lei</b></div>
 <div class="card">Total neîncasat<b id="finUnpaid">0 lei</b></div>
 <div class="card">Cash la șoferi<b id="finCash">0 lei</b></div>
@@ -138,7 +167,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 const SUPABASE_URL="https://vroqxrcuqgwhmnacenfo.supabase.co";
 const SUPABASE_KEY="sb_publishable_vVvOwJ7rNnCBKqdTjGd5Tw_QozYFQye";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let orders=[],clients=[],drivers=[],vehicles=[],fuelLogs=[],currentProfile=null;
+let orders=[],clients=[],drivers=[],vehicles=[],fuelLogs=[],expenses=[],currentProfile=null;
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 function table(headers,rows){
@@ -172,21 +201,23 @@ async function login(){
 }
 $("loginBtn").onclick=login;$("passwordInput").onkeydown=e=>{if(e.key==="Enter")login()};
 async function load(){
- const [o,c,d,v,f]=await Promise.all([
+ const [o,c,d,v,f,e]=await Promise.all([
   db.from("orders").select("*").order("id",{ascending:false}),
   db.from("clients").select("*").order("id",{ascending:false}),
   db.from("drivers").select("*").order("id",{ascending:false}),
   db.from("vehicles").select("*").order("id",{ascending:false}),
-  db.from("fuel_logs").select("*").order("date",{ascending:false})
+  db.from("fuel_logs").select("*").order("date",{ascending:false}),
+  db.from("expenses").select("*").order("date",{ascending:false})
  ]);
- if(o.error||c.error||d.error||v.error||f.error){
-  console.error(o.error,c.error,d.error,v.error,f.error);
+ if(o.error||c.error||d.error||v.error||f.error||e.error){
+  console.error(o.error,c.error,d.error,v.error,f.error,e.error);
   alert("Eroare la citirea datelor din Supabase.");
   return;
 }
- orders=o.data||[];clients=c.data||[];drivers=d.data||[];vehicles=v.data||[];fuelLogs=f.data||[];
+ orders=o.data||[];clients=c.data||[];drivers=d.data||[];vehicles=v.data||[];fuelLogs=f.data||[];expenses=e.data||[];
  render();
  renderFuel();
+ renderExpenses();
  if(!$("reportFrom").value){setReportPeriod("today");}
 }
 function localDateInput(d){
@@ -219,11 +250,15 @@ function renderReport(){
  const failed=rs.filter(x=>String(x.status||"").toLowerCase()==="nereușită").length;
  const paid=rs.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat").reduce((a,x)=>a+Number(x.paid_amount||0),0);
  const unpaid=rs.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0);
+ const fs=fuelLogs.filter(x=>{const d=new Date(x.date);return d>=start&&d<=end;});
+ const es=expenses.filter(x=>{const d=new Date(x.date);return d>=start&&d<=end;});
+ const profit=getProfitStats(rs,fs,es);
  $("repOrders").textContent=rs.length;
  $("repDelivered").textContent=delivered;
  $("repFailed").textContent=failed;
  $("repPaid").textContent=paid.toFixed(2)+" lei";
  $("repUnpaid").textContent=unpaid.toFixed(2)+" lei";
+ $("repProfit").textContent=profit.profit.toFixed(2)+" lei";
  $("reportDrivers").innerHTML=table(
    ["Șofer","Comenzi","Livrate","Nereușite","Încasat","Neîncasat"],
    drivers.map(d=>{
@@ -280,6 +315,38 @@ function renderFuel(){
  ]))
  : "<p style='padding:12px'>Nu există încă alimentări înregistrate.</p>";
 }
+function fillExpenseSelects(){
+ const vsel=$("expenseVehicle"), dsel=$("expenseDriver");
+ if(vsel) vsel.innerHTML='<option value="">Fără vehicul</option>'+vehicles.map(v=>`<option value="${v.id}">${esc(v.plate||v.registration_number||"Vehicul "+v.id)} — ${esc(v.model||"")}</option>`).join("");
+ if(dsel) dsel.innerHTML='<option value="">Fără șofer</option>'+drivers.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join("");
+ const now=new Date(); if($("expenseDate")&&!$("expenseDate").value) $("expenseDate").value=localDateInput(now);
+}
+async function addExpense(){
+ const category=$("expenseCategory").value, amount=Number($("expenseAmount").value||0), date=$("expenseDate").value;
+ const vehicle_id=$("expenseVehicle").value?Number($("expenseVehicle").value):null;
+ const driver_id=$("expenseDriver").value?Number($("expenseDriver").value):null;
+ const description=$("expenseDescription").value.trim(), notes=$("expenseNotes").value.trim();
+ if(!category||amount<=0||!date){alert("Completează categoria, suma și data.");return}
+ const {error}=await db.from("expenses").insert({category,description,amount,date:date+"T12:00:00",vehicle_id,driver_id,notes});
+ if(error){alert("Eroare la salvarea cheltuielii: "+error.message);return}
+ $("expenseAmount").value="";$("expenseDescription").value="";$("expenseNotes").value="";
+ await load(); alert("Cheltuiala a fost salvată.");
+}
+function renderExpenses(){
+ if(!$("expensesTable"))return; fillExpenseSelects();
+ const total=expenses.reduce((a,x)=>a+Number(x.amount||0),0);
+ const salaries=expenses.filter(x=>String(x.category||"").toLowerCase()==="salarii").reduce((a,x)=>a+Number(x.amount||0),0);
+ const auto=expenses.filter(x=>["combustibil","reparații","deservire auto","asigurare"].includes(String(x.category||"").toLowerCase())).reduce((a,x)=>a+Number(x.amount||0),0);
+ const other=total-salaries-auto;
+ $("expenseTotal").textContent=total.toFixed(2)+" lei"; $("expenseSalaries").textContent=salaries.toFixed(2)+" lei"; $("expenseAuto").textContent=auto.toFixed(2)+" lei"; $("expenseOther").textContent=other.toFixed(2)+" lei";
+ $("expensesTable").innerHTML=expenses.length?table(["Data","Categorie","Descriere","Sumă","Vehicul","Șofer","Observații"],expenses.map(x=>[new Date(x.date).toLocaleDateString("ro-RO"),x.category,x.description||"—",Number(x.amount||0).toFixed(2)+" lei",vehicles.find(v=>Number(v.id)===Number(x.vehicle_id))?.plate||"—",drivers.find(d=>Number(d.id)===Number(x.driver_id))?.name||"—",x.notes||"—"])):"<p style='padding:12px'>Nu există încă cheltuieli înregistrate.</p>";
+}
+function getProfitStats(orderSet, fuelSet, expenseSet){
+ const revenue=orderSet.filter(x=>String(x.status||"").toLowerCase()==="livrată").reduce((a,x)=>a+Number(x.cash||0),0);
+ const fuel=fuelSet.reduce((a,x)=>a+Number(x.total_cost||Number(x.liters||0)*Number(x.price_per_liter||0)),0);
+ const other=expenseSet.reduce((a,x)=>a+Number(x.amount||0),0);
+ return {revenue,fuel,other,totalExpenses:fuel+other,profit:revenue-fuel-other};
+}
 function render(){
  $("cntOrders").textContent=orders.length;
  $("cntDelivered").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
@@ -298,6 +365,10 @@ function render(){
  $("driversTable").innerHTML=table(["ID","Nume","Telefon"],drivers.map(x=>[x.id,x.name,x.phone]));
  $("vehiclesTable").innerHTML=table(["ID","Număr","Model","Șofer","Consum"],vehicles.map(x=>[x.id,x.plate||x.registration_number,x.model,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.fuel_consumption]));
 
+ const profit=getProfitStats(orders,fuelLogs,expenses);
+ $("finRevenue").textContent=profit.revenue.toFixed(2)+" lei";
+ $("finExpenses").textContent=profit.totalExpenses.toFixed(2)+" lei";
+ $("finProfit").textContent=profit.profit.toFixed(2)+" lei";
  const paidOrders=orders.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
  const paidTotal=paidOrders.reduce((a,x)=>a+Number(x.paid_amount||0),0);
  const unpaidTotal=orders.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat")
