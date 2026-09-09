@@ -89,10 +89,12 @@ async function login(){
  const {data,error}=await db.auth.signInWithPassword({email,password});
  $("loginBtn").disabled=false;
  if(error){$("loginError").textContent=error.message;$("loginError").style.display="block";return}
+ const {data:profile,error:profileError}=await db.from("profiles").select("name,role,driver_id").eq("id",data.user.id).maybeSingle();
+ if(profileError){$("loginError").textContent="Profil utilizator: "+profileError.message;$("loginError").style.display="block";return}
+ if(!profile){$("loginError").textContent="Utilizatorul nu are profil în CRM.";$("loginError").style.display="block";return}
+ currentProfile=profile;
  $("login").style.display="none";$("app").style.display="block";
- const {data:profile,error}=await db.from("profiles").select("name,role,driver_id").eq("id",user.id).maybeSingle();
- if(error){alert("Nu pot citi profilul: "+error.message);return}
- currentProfile=profile; await load();
+ await load();
 }
 $("loginBtn").onclick=login;$("passwordInput").onkeydown=e=>{if(e.key==="Enter")login()};
 async function load(){
