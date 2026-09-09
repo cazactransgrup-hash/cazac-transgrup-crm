@@ -116,11 +116,12 @@ function render(){
  $("cntDelivered").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
  $("cntDrivers").textContent=drivers.length;$("cntVehicles").textContent=vehicles.length;
  $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["Cod","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code,x.recipient,x.status]));
- $("ordersTable").innerHTML=table(["Cod","Client","Destinatar","Adresă","Șofer","Cash","Greutate","Status","Motiv","Acțiuni"],orders.map(x=>[
+ $("ordersTable").innerHTML=table(["Cod","Client","Destinatar","Adresă","Șofer","Cash","Greutate","Status","Motiv","Poză","Acțiuni"],orders.map(x=>[
  x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.cash,x.weight,x.status,
  x.failure_reason||"—",
+ x.proof_photo_url ? `<a href="${esc(x.proof_photo_url)}" target="_blank">📷 Vezi</a>` : "—",
  currentProfile?.role==="driver"
- ? `<button class="btn" style="padding:7px 10px;margin-right:5px;background:#0f766e" onclick="navigateToOrder(${x.id})">📍 Navigare</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="driverDelivered(${x.id})">Livrată</button><button class="btn" style="padding:7px 10px;background:#dc2626" onclick="driverFailed(${x.id})">Nereușită</button>`
+ ? `<button class="btn" style="padding:7px 10px;margin-right:5px;background:#0f766e" onclick="navigateToOrder(${x.id})">📍 Navigare</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="takeDeliveryPhoto(${x.id})">📷 Poză</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="driverDelivered(${x.id})">Livrată</button><button class="btn" style="padding:7px 10px;background:#dc2626" onclick="driverFailed(${x.id})">Nereușită</button>`
  : "—"]));
  $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
  $("driversTable").innerHTML=table(["ID","Nume","Telefon"],drivers.map(x=>[x.id,x.name,x.phone]));
@@ -132,6 +133,27 @@ function navigateToOrder(orderId){
  const destination=[order.address,order.city].filter(Boolean).join(", ");
  if(!destination){alert("Comanda nu are adresă.");return}
  window.open("https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(destination),"_blank");
+}
+function takeDeliveryPhoto(orderId){
+ const input=document.createElement("input");
+ input.type="file";
+ input.accept="image/*";
+ input.capture="environment";
+ input.onchange=async()=>{
+   const file=input.files?.[0];
+   if(!file)return;
+   const {data,error}=await db.storage.from("delivery-proofs").upload(
+     `order-${orderId}-${Date.now()}.${(file.name.split(".").pop()||"jpg")}`,
+     file,{upsert:false}
+   );
+   if(error){alert("Eroare la încărcarea pozei: "+error.message);return}
+   const {data:urlData}=db.storage.from("delivery-proofs").getPublicUrl(data.path);
+   const {error:updateError}=await db.from("orders").update({proof_photo_url:urlData.publicUrl}).eq("id",orderId);
+   if(updateError){alert("Poza s-a încărcat, dar nu s-a putut salva la comandă: "+updateError.message);return}
+   await load();
+   alert("Poza a fost salvată.");
+ };
+ input.click();
 }
 async function driverDelivered(orderId){
  const {error}=await db.from("orders").update({status:"Livrată"}).eq("id",orderId);
