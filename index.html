@@ -6,6 +6,8 @@
 <title>Cazac TransGrup CRM</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6fa;color:#172033}
 button,input,select{font:inherit}button{cursor:pointer}
@@ -15,6 +17,7 @@ input,select{width:100%;padding:12px;margin:7px 0 14px;border:1px solid #ccd2dc;
 .main{margin-left:225px;padding:25px}section{display:none}section.on{display:block}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}.card,.panel{background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 10px #0000000a}.card b{display:block;font-size:28px;margin-top:8px}.panel{margin-top:18px;overflow:auto}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #eee;white-space:nowrap}
 .order-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.form{display:none;margin-top:15px;padding:18px;background:#f8fafc;border-radius:10px}.form.show{display:block}.formgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.actions{display:flex;gap:10px}.secondary{background:#64748b}.success{color:#067647;background:#ecfdf3;padding:10px;border-radius:8px;display:none;margin-bottom:12px}
+#ordersMap{height:70vh;min-height:520px;border-radius:12px;overflow:hidden}.map-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.map-status{padding:10px 12px;background:#f1f5f9;border-radius:8px;color:#334155}.map-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:14px}.map-legend span{display:inline-flex;align-items:center;gap:6px}.dot{width:11px;height:11px;border-radius:50%;display:inline-block}.dot-new{background:#2563eb}.dot-delivered{background:#16a34a}.dot-failed{background:#dc2626}.dot-other{background:#64748b}
 @media(max-width:800px){.side{width:65px;padding:10px}.side h2{font-size:0}.side h2:after{content:"CTG";font-size:18px}.side button{font-size:0;text-align:center}.side button:before{content:"•";font-size:20px}.main{margin-left:65px;padding:15px}.cards{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -47,7 +50,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 </div><div class="panel" id="recent"></div></section>
 
 <section id="orders">
-<div class="order-head"><h2>Comenzi</h2><div class="actions"><button class="btn" onclick="toggleForm()">➕ Comandă nouă</button><button class="btn secondary" onclick="document.getElementById('excelOrdersInput').click()">📥 Import Excel</button><input id="excelOrdersInput" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importOrdersExcel(event)"></div></div>
+<div class="order-head"><h2>Comenzi</h2><div class="actions"><button class="btn" onclick="toggleForm()">➕ Comandă nouă</button><button class="btn secondary" onclick="document.getElementById('excelOrdersInput').click()">📥 Import Excel</button><button class="btn" style="background:#0f766e" onclick="show('map');openOrdersMap()">🗺️ Comenzi pe hartă</button><input id="excelOrdersInput" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importOrdersExcel(event)"></div></div>
 <div id="excelImportBox" class="form">
 <h3>📥 Import comenzi din Excel</h3>
 <p style="margin-top:0">Coloane recomandate: <b>Cod</b>, <b>Client</b>, <b>Destinatar</b>, <b>Telefon</b>, <b>Adresă</b>, <b>Localitate</b>, <b>Ramburs</b>, <b>Greutate</b>, <b>Șofer</b>. Codul poate lipsi și va fi generat automat.</p>
@@ -69,6 +72,18 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <div class="actions"><button class="btn" onclick="saveOrder()">Salvează comanda</button><button class="btn secondary" onclick="toggleForm()">Închide</button></div>
 </div>
 <div class="panel" id="ordersTable"></div>
+</section>
+
+<section id="map">
+<h2>🗺️ Comenzi pe hartă</h2>
+<div class="panel">
+  <div class="map-toolbar">
+    <button class="btn" onclick="openOrdersMap()">🔄 Actualizează harta</button>
+    <span id="mapStatus" class="map-status">Se pregătește harta...</span>
+  </div>
+  <div id="ordersMap" style="margin-top:15px"></div>
+  <div class="map-legend"><span><span><i class="dot dot-new"></i> Nouă / În curs</span><span><i class="dot dot-delivered"></i> Livrată</span><span><i class="dot dot-failed"></i> Nereușită</span><span><i class="dot dot-other"></i> Alt status</span></div>
+</div>
 </section>
 
 <section id="clients"><h2>Clienți</h2><div class="panel" id="clientsTable"></div></section>
@@ -174,6 +189,7 @@ const SUPABASE_URL="https://vroqxrcuqgwhmnacenfo.supabase.co";
 const SUPABASE_KEY="sb_publishable_vVvOwJ7rNnCBKqdTjGd5Tw_QozYFQye";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let orders=[],clients=[],drivers=[],vehicles=[],fuelLogs=[],expenses=[],currentProfile=null;
+let ordersMap=null, ordersMapMarkers=null, mapOpening=false;
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 function table(headers,rows){
@@ -184,7 +200,7 @@ function table(headers,rows){
  }).join("")}</tr>`).join("")+
  `</tbody></table>`;
 }
-function show(id){document.querySelectorAll("section").forEach(s=>s.classList.remove("on"));const sec=$(id);if(!sec)return;sec.classList.add("on");if(id==="orders")fillSelects();if(id==="vehicles")renderVehicles();}
+function show(id){document.querySelectorAll("section").forEach(s=>s.classList.remove("on"));const sec=$(id);if(!sec)return;sec.classList.add("on");if(id==="orders")fillSelects();if(id==="vehicles")renderVehicles();if(id==="map")setTimeout(()=>openOrdersMap(),50);}
 function toggleForm(){$("orderForm").classList.toggle("show");if($("orderForm").classList.contains("show"))fillSelects()}
 function fillSelects(){
  $("clientSel").innerHTML=clients.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
@@ -405,6 +421,73 @@ function render(){
    })
  );
 }
+function mapStatusClass(status){
+ const s=String(status||"").toLowerCase();
+ if(s.includes("livrat"))return "delivered";
+ if(s.includes("nereușit")||s.includes("nereusit"))return "failed";
+ if(s.includes("nou")||s.includes("curs"))return "new";
+ return "other";
+}
+function markerIcon(status){
+ const cls=mapStatusClass(status);
+ const bg=cls==="delivered"?"#16a34a":cls==="failed"?"#dc2626":cls==="new"?"#2563eb":"#64748b";
+ return L.divIcon({className:"",html:`<div style="width:18px;height:18px;border-radius:50%;background:${bg};border:3px solid #fff;box-shadow:0 1px 6px #0006"></div>`,iconSize:[18,18],iconAnchor:[9,9],popupAnchor:[0,-8]});
+}
+async function geocodeOrder(order){
+ if(Number.isFinite(Number(order.latitude))&&Number.isFinite(Number(order.longitude)))return {lat:Number(order.latitude),lon:Number(order.longitude),saved:false};
+ const q=[order.address,order.city,"Moldova"].filter(Boolean).join(", ");
+ if(!q)return null;
+ try{
+   const url="https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=md&accept-language=ro&q="+encodeURIComponent(q);
+   const res=await fetch(url,{headers:{"Accept":"application/json"}});
+   if(!res.ok)throw new Error("Geocodarea a returnat HTTP "+res.status);
+   const data=await res.json();
+   if(!data.length)return null;
+   const lat=Number(data[0].lat),lon=Number(data[0].lon);
+   if(!Number.isFinite(lat)||!Number.isFinite(lon))return null;
+   const {error}=await db.from("orders").update({latitude:lat,longitude:lon}).eq("id",order.id);
+   if(error)console.warn("Coordonatele nu au putut fi salvate pentru comanda "+order.id,error.message);
+   order.latitude=lat;order.longitude=lon;
+   return {lat,lon,saved:!error};
+ }catch(e){console.warn("Geocodare eșuată pentru",q,e);return null;}
+}
+async function openOrdersMap(){
+ const box=$("ordersMap"),status=$("mapStatus");
+ if(!box||!window.L||mapOpening)return;
+ mapOpening=true;
+ status.textContent="Se încarcă comenzile pe hartă...";
+ if(!ordersMap){
+   ordersMap=L.map(box).setView([47.15,28.6],7.5);
+   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(ordersMap);
+   ordersMapMarkers=L.layerGroup().addTo(ordersMap);
+ }else{
+   ordersMap.invalidateSize();
+   ordersMapMarkers.clearLayers();
+ }
+ const points=[];let located=0,missing=0,geocoded=0;
+ const total=orders.length;
+ for(let i=0;i<total;i++){
+   const o=orders[i];
+   status.textContent=`Localizez comenzile: ${i+1}/${total}...`;
+   const wasMissing=!(Number.isFinite(Number(o.latitude))&&Number.isFinite(Number(o.longitude)));
+   const point=await geocodeOrder(o);
+   if(point){
+     located++;if(wasMissing)geocoded++;
+     const client=clients.find(c=>Number(c.id)===Number(o.client_id));
+     const driver=drivers.find(d=>Number(d.id)===Number(o.driver_id));
+     const popup=`<div style="min-width:230px"><b>${esc(o.code||"Comandă")}</b><br><b>Client:</b> ${esc(client?.name||"—")}<br><b>Destinatar:</b> ${esc(o.recipient||"—")}<br><b>Telefon:</b> ${esc(o.phone||"—")}<br><b>Adresă:</b> ${esc([o.address,o.city].filter(Boolean).join(", "))}<br><b>Ramburs:</b> ${Number(o.cash||0).toFixed(2)} lei<br><b>Șofer:</b> ${esc(driver?.name||"—")}<br><b>Status:</b> ${esc(o.status||"—")}<br><br><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([o.address,o.city].filter(Boolean).join(", "))}" target="_blank">📍 Deschide navigarea</a></div>`;
+     L.marker([point.lat,point.lon],{icon:markerIcon(o.status)}).bindPopup(popup).addTo(ordersMapMarkers);
+     points.push([point.lat,point.lon]);
+   }else missing++;
+   if(wasMissing)await new Promise(r=>setTimeout(r,1100));
+ }
+ if(points.length){
+   if(points.length===1)ordersMap.setView(points[0],15);else ordersMap.fitBounds(points,{padding:[30,30],maxZoom:13});
+ }
+ status.textContent=`${located} din ${total} comenzi sunt pe hartă${geocoded?` · ${geocoded} adrese geocodate automat`:""}${missing?` · ${missing} fără coordonate`:""}.`;
+ ordersMap.invalidateSize();
+ mapOpening=false;
+}
 function navigateToOrder(orderId){
  const order=orders.find(x=>Number(x.id)===Number(orderId));
  if(!order){alert("Comanda nu a fost găsită.");return}
@@ -487,18 +570,17 @@ async function importOrdersExcel(event){
   const data=await file.arrayBuffer(); const wb=XLSX.read(data,{type:"array"}); const ws=wb.Sheets[wb.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(ws,{defval:""}); if(!rows.length)throw new Error("Fișierul Excel nu conține rânduri de comenzi.");
 
+  // Reload clients/drivers directly from Supabase so the importer always uses current data.
   const [{data:dbClients,error:cErr},{data:dbDrivers,error:dErr}]=await Promise.all([
-   db.from("clients").select("id,name,phone,tariff").order("id"),
+   db.from("clients").select("id,name").order("id"),
    db.from("drivers").select("id,name").order("id")
   ]);
   if(cErr)throw cErr; if(dErr)throw dErr;
   const currentClients=dbClients||[], currentDrivers=dbDrivers||[];
   const clientMap=new Map(currentClients.map(c=>[normText(c.name),c]));
   const driverMap=new Map(currentDrivers.map(d=>[normText(d.name),d]));
-  const valid=[], problems=[], createdClients=[];
-
-  for(let i=0;i<rows.length;i++){
-   const r=rows[i];
+  const valid=[], problems=[];
+  rows.forEach((r,i)=>{
    const clientName=String(pickCell(r,["Client","Nume client","Expeditor","Beneficiar"])).trim();
    const recipient=String(pickCell(r,["Destinatar","Recipient","Nume destinatar"])).trim();
    const address=String(pickCell(r,["Adresă","Adresa","Address"])).trim();
@@ -508,40 +590,22 @@ async function importOrdersExcel(event){
    const code=String(pickCell(r,["Cod / AWB","Cod","Cod colet","Tracking No","AWB","Code"])).trim()||makeOrderCode();
    const cash=Number(String(pickCell(r,["Ramburs","Cash","Încasare","Incasare"])).replace(/[^0-9,.-]/g,"").replace(",",".")||0);
    const weight=Number(String(pickCell(r,["Greutate","Weight"])).replace(/[^0-9,.-]/g,"").replace(",",".")||0);
-
-   // Clientul NU trebuie să existe în CRM înainte de import.
-   // Dacă lipsește, îl creăm automat folosind numele și telefonul din Excel.
-   let client=clientMap.get(normText(clientName));
-   if(clientName && !client){
-    const {data:newClient,error:newClientError}=await db.from("clients").insert({
-      name:clientName, phone:phone||null, tariff:0, balance:0
-    }).select("id,name,phone,tariff").single();
-    if(newClientError){
-      problems.push(`Rândul ${i+2}: clientul „${clientName}” nu a putut fi creat automat: ${newClientError.message}`);
-      continue;
-    }
-    client=newClient; clientMap.set(normText(client.name),client); createdClients.push(client.name);
-   }
-   if(!clientName){
-    client=null;
-   }
-   if(!recipient||!address){problems.push(`Rândul ${i+2}: lipsesc Destinatar sau Adresă.`);continue}
-   const driver=driverMap.get(normText(driverName));
-   if(!driverName||!driver){problems.push(`Rândul ${i+2}: șoferul „${driverName||"(lipsă)"}” nu există în CRM.`);continue}
-
-   valid.push({code,client_id:client?.id||null,recipient,phone,address,city,cash:Number.isFinite(cash)?cash:0,weight:Number.isFinite(weight)?weight:0,driver_id:driver.id,status:"Nouă"});
-  }
+   const client=clientMap.get(normText(clientName)); const driver=driverMap.get(normText(driverName));
+   if(!clientName||!client){problems.push(`Rândul ${i+2}: clientul „${clientName||"(lipsă)"}” nu există în CRM.`);return}
+   if(!recipient||!address){problems.push(`Rândul ${i+2}: lipsesc Destinatar sau Adresă.`);return}
+   if(!driverName||!driver){problems.push(`Rândul ${i+2}: șoferul „${driverName||"(lipsă)"}” nu există în CRM.`);return}
+   valid.push({code,client_id:client.id,recipient,phone,address,city,cash:Number.isFinite(cash)?cash:0,weight:Number.isFinite(weight)?weight:0,driver_id:driver.id,status:"Nouă"});
+  });
   if(!valid.length){
    const detail=problems.length?"\n\n"+problems.join("\n"):"";
    throw new Error("Nu există rânduri valide pentru import."+detail);
   }
   const {error}=await db.from("orders").insert(valid); if(error)throw error;
-  ok.textContent=`Import finalizat: ${valid.length} comenzi adăugate.`+(createdClients.length?` ${createdClients.length} clienți noi creați automat.`:"")+(problems.length?` ${problems.length} rânduri ignorate.`:""); ok.style.display="block";
+  ok.textContent=`Import finalizat: ${valid.length} comenzi adăugate.`+(problems.length?` ${problems.length} rânduri ignorate.`:""); ok.style.display="block";
   if(problems.length){err.innerHTML="<b>Rânduri ignorate:</b><br>"+problems.map(esc).join("<br>");err.style.display="block";}
   await load();
  }catch(e){err.textContent="Eroare la import: "+(e?.message||e);err.style.display="block";}
 }
-
 async function saveOrder(){
  $("orderError").style.display="none";$("orderSuccess").style.display="none";
  const client_id=Number($("clientSel").value),driver_id=Number($("driverSel").value);
