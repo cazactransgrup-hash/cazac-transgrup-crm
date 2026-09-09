@@ -71,7 +71,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 const SUPABASE_URL="https://vroqxrcuqgwhmnacenfo.supabase.co";
 const SUPABASE_KEY="sb_publishable_vVvOwJ7rNnCBKqdTjGd5Tw_QozYFQye";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let orders=[],clients=[],drivers=[],vehicles=[];
+let orders=[],clients=[],drivers=[],vehicles=[],currentProfile=null;
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 function table(h,rows){if(!rows.length)return"<p>Nu există date.</p>";return"<table><thead><tr>"+h.map(x=>"<th>"+esc(x)+"</th>").join("")+"</tr></thead><tbody>"+rows.map(r=>"<tr>"+r.map(x=>"<td>"+esc(x)+"</td>").join("")+"</tr>").join("")+"</tbody></table>"}
@@ -89,7 +89,10 @@ async function login(){
  const {data,error}=await db.auth.signInWithPassword({email,password});
  $("loginBtn").disabled=false;
  if(error){$("loginError").textContent=error.message;$("loginError").style.display="block";return}
- $("login").style.display="none";$("app").style.display="block";await load();
+ $("login").style.display="none";$("app").style.display="block";
+ const {data:profile,error}=await db.from("profiles").select("name,role,driver_id").eq("id",user.id).maybeSingle();
+ if(error){alert("Nu pot citi profilul: "+error.message);return}
+ currentProfile=profile; await load();
 }
 $("loginBtn").onclick=login;$("passwordInput").onkeydown=e=>{if(e.key==="Enter")login()};
 async function load(){
@@ -107,19 +110,26 @@ function render(){
  $("cntDelivered").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
  $("cntDrivers").textContent=drivers.length;$("cntVehicles").textContent=vehicles.length;
  $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["Cod","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code,x.recipient,x.status]));
- $("ordersTable").innerHTML=table(["Cod","Client","Destinatar","Adresă","Șofer","Cash","Greutate","Status"],orders.map(x=>[
- x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.cash,x.weight,
- `<select onchange="changeStatus(${x.id},this.value)" style="padding:7px;border:1px solid #ccd2dc;border-radius:7px">
- ${["Nouă","Repartizată","Ridicată","În curs","Livrată","Nereușită"].map(s=>`<option value="${s}" ${x.status===s?"selected":""}>${s}</option>`).join("")}
- </select>`]));
+ $("ordersTable").innerHTML=table(["Cod","Client","Destinatar","Adresă","Șofer","Cash","Greutate","Status","Acțiuni"],orders.map(x=>[
+ x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.cash,x.weight,x.status,
+ currentProfile?.role==="driver"
+ ? `<button class="btn" style="padding:7px 10px;margin-right:5px" onclick="driverDelivered(${x.id})">Livrată</button><button class="btn" style="padding:7px 10px;background:#dc2626" onclick="driverFailed(${x.id})">Nereușită</button>`
+ : "—"]));
  $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
  $("driversTable").innerHTML=table(["ID","Nume","Telefon"],drivers.map(x=>[x.id,x.name,x.phone]));
  $("vehiclesTable").innerHTML=table(["ID","Număr","Model","Șofer","Consum"],vehicles.map(x=>[x.id,x.plate||x.registration_number,x.model,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.fuel_consumption]));
 }
-async function changeStatus(orderId,newStatus){
- const {error}=await db.from("orders").update({status:newStatus}).eq("id",orderId);
- if(error){alert("Nu s-a putut schimba statusul: "+error.message);return}
- await load();
+async function driverDelivered(orderId){
+ const {error}=await db.from("orders").update({status:"Livrată"}).eq("id",orderId);
+ if(error){alert("Eroare: "+error.message);return} await load();
+}
+async function driverFailed(orderId){
+ const reason=prompt("Motivul livrării nereușite:");
+ if(reason===null)return;
+ if(!reason.trim()){alert("Introdu motivul.");return}
+ const {error}=await db.from("orders").update({status:"Nereușită"}).eq("id",orderId);
+ if(error){alert("Eroare: "+error.message);return}
+ await load(); alert("Comanda a fost marcată Nereușită. Motiv: "+reason.trim());
 }
 async function saveOrder(){
  $("orderError").style.display="none";$("orderSuccess").style.display="none";
