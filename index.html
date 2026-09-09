@@ -486,7 +486,16 @@ async function importOrdersExcel(event){
  try{
   const data=await file.arrayBuffer(); const wb=XLSX.read(data,{type:"array"}); const ws=wb.Sheets[wb.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(ws,{defval:""}); if(!rows.length)throw new Error("Fișierul Excel nu conține rânduri de comenzi.");
-  const clientMap=new Map(clients.map(c=>[normText(c.name),c])); const driverMap=new Map(drivers.map(d=>[normText(d.name),d]));
+
+  // Reload clients/drivers directly from Supabase so the importer always uses current data.
+  const [{data:dbClients,error:cErr},{data:dbDrivers,error:dErr}]=await Promise.all([
+   db.from("clients").select("id,name").order("id"),
+   db.from("drivers").select("id,name").order("id")
+  ]);
+  if(cErr)throw cErr; if(dErr)throw dErr;
+  const currentClients=dbClients||[], currentDrivers=dbDrivers||[];
+  const clientMap=new Map(currentClients.map(c=>[normText(c.name),c]));
+  const driverMap=new Map(currentDrivers.map(d=>[normText(d.name),d]));
   const valid=[], problems=[];
   rows.forEach((r,i)=>{
    const clientName=String(pickCell(r,["Client","Nume client","Expeditor","Beneficiar"])).trim();
@@ -495,7 +504,7 @@ async function importOrdersExcel(event){
    const phone=String(pickCell(r,["Telefon","Phone","Tel"])).trim();
    const city=String(pickCell(r,["Localitate","Oraș","Oras","City"])||"Chișinău").trim();
    const driverName=String(pickCell(r,["Șofer","Sofer","Driver","Curier"])).trim();
-   const code=String(pickCell(r,["Cod","Cod colet","Tracking No","AWB","Code"])).trim()||makeOrderCode();
+   const code=String(pickCell(r,["Cod / AWB","Cod","Cod colet","Tracking No","AWB","Code"])).trim()||makeOrderCode();
    const cash=Number(String(pickCell(r,["Ramburs","Cash","Încasare","Incasare"])).replace(/[^0-9,.-]/g,"").replace(",",".")||0);
    const weight=Number(String(pickCell(r,["Greutate","Weight"])).replace(/[^0-9,.-]/g,"").replace(",",".")||0);
    const client=clientMap.get(normText(clientName)); const driver=driverMap.get(normText(driverName));
@@ -504,14 +513,16 @@ async function importOrdersExcel(event){
    if(!driverName||!driver){problems.push(`Rândul ${i+2}: șoferul „${driverName||"(lipsă)"}” nu există în CRM.`);return}
    valid.push({code,client_id:client.id,recipient,phone,address,city,cash:Number.isFinite(cash)?cash:0,weight:Number.isFinite(weight)?weight:0,driver_id:driver.id,status:"Nouă"});
   });
-  if(!valid.length)throw new Error("Nu există rânduri valide pentru import. Verifică numele clienților și șoferilor din Excel.");
+  if(!valid.length){
+   const detail=problems.length?"\n\n"+problems.join("\n"):"";
+   throw new Error("Nu există rânduri valide pentru import."+detail);
+  }
   const {error}=await db.from("orders").insert(valid); if(error)throw error;
   ok.textContent=`Import finalizat: ${valid.length} comenzi adăugate.`+(problems.length?` ${problems.length} rânduri ignorate.`:""); ok.style.display="block";
   if(problems.length){err.innerHTML="<b>Rânduri ignorate:</b><br>"+problems.map(esc).join("<br>");err.style.display="block";}
   await load();
  }catch(e){err.textContent="Eroare la import: "+(e?.message||e);err.style.display="block";}
 }
-
 async function saveOrder(){
  $("orderError").style.display="none";$("orderSuccess").style.display="none";
  const client_id=Number($("clientSel").value),driver_id=Number($("driverSel").value);
