@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cazac TransGrup CRM</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6fa;color:#172033}
+button,input,select{font:inherit}button{cursor:pointer}
+.login{min-height:100vh;display:grid;place-items:center;background:#eef3f9}.box{width:min(420px,92vw);background:#fff;padding:30px;border-radius:16px;box-shadow:0 12px 40px #0002}
+input,select{width:100%;padding:12px;margin:7px 0 14px;border:1px solid #ccd2dc;border-radius:8px;background:#fff}.btn{padding:12px 18px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:700}.error{display:none;background:#fff1f0;color:#b42318;padding:10px;border-radius:8px;margin-bottom:12px}
+.app{display:none}.side{position:fixed;top:0;bottom:0;width:225px;background:#111827;color:#fff;padding:20px}.side button{display:block;background:transparent;color:#fff;border:0;width:100%;padding:12px;text-align:left;border-radius:8px}.side button:hover{background:#1f2937}
+.main{margin-left:225px;padding:25px}section{display:none}section.on{display:block}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}.card,.panel{background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 10px #0000000a}.card b{display:block;font-size:28px;margin-top:8px}.panel{margin-top:18px;overflow:auto}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #eee;white-space:nowrap}
+.order-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.form{display:none;margin-top:15px;padding:18px;background:#f8fafc;border-radius:10px}.form.show{display:block}.formgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.actions{display:flex;gap:10px}.secondary{background:#64748b}.success{color:#067647;background:#ecfdf3;padding:10px;border-radius:8px;display:none;margin-bottom:12px}
+#ordersMap{height:70vh;min-height:520px;border-radius:12px;overflow:hidden}.map-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.map-status{padding:10px 12px;background:#f1f5f9;border-radius:8px;color:#334155}.map-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:14px}.map-legend span{display:inline-flex;align-items:center;gap:6px}.dot{width:11px;height:11px;border-radius:50%;display:inline-block}.dot-new{background:#2563eb}.dot-delivered{background:#16a34a}.dot-failed{background:#dc2626}.dot-other{background:#64748b}
+@media(max-width:800px){.side{width:65px;padding:10px}.side h2{font-size:0}.side h2:after{content:"CTG";font-size:18px}.side button{font-size:0;text-align:center}.side button:before{content:"•";font-size:20px}.main{margin-left:65px;padding:15px}.cards{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}}
+.driver-only{display:none}.driver-card{cursor:pointer;text-align:center;min-height:105px}.driver-card b{display:block;font-size:28px;margin-top:8px}.driver-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.driver-actions button{min-height:64px;font-size:17px}@media(max-width:600px){.driver-actions{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="login" class="login"><div class="box">
+<h2>Cazac TransGrup</h2><p>CRM Curierat — Admin</p>
+<div id="loginError" class="error"></div>
+<label>Email</label><input id="emailInput" type="email" autocomplete="username">
+<label>Parolă</label><input id="passwordInput" type="password" autocomplete="current-password">
+<button id="loginBtn" class="btn" style="width:100%">Intră în CRM</button>
+</div></div>
+
+<div id="app" class="app">
+<aside class="side"><h2>CTG CRM</h2>
+<button class="admin-nav" onclick="show('dashboard')">📊 Dashboard</button>
+<button onclick="show('orders')">📦 Comenzi</button>
+<button class="admin-nav" onclick="show('clients')">👥 Clienți</button>
+<button class="admin-nav" onclick="show('drivers')">🚚 Șoferi</button>
+<button class="admin-nav" onclick="show('vehicles')">🚐 Vehicule</button>
+<button class="admin-nav" onclick="show('finance')">💰 Financiar</button>
+<button class="admin-nav" onclick="show('reports')">📊 Rapoarte</button>
+<button class="admin-nav" onclick="show('fuel')">⛽ Combustibil</button>
+<button class="admin-nav" onclick="show('expenses')">💸 Cheltuieli</button>
+<button class="driver-only" onclick="show('driverHome')">🏠 Acasă</button>
+<button class="driver-only" onclick="show('map');openOrdersMap()">🗺️ Hartă</button>
+<button onclick="logout()">↩ Ieșire</button>
+</aside>
+<main class="main">
+<section id="driverHome">
+<h2>👋 Bună ziua, <span id="driverName">Șofer</span></h2>
+<div class="cards">
+<div class="card driver-card" onclick="show('orders')">📦 Livrări azi<b id="drvTotal">0</b></div>
+<div class="card driver-card" onclick="show('orders')">🟢 Livrate<b id="drvDelivered">0</b></div>
+<div class="card driver-card" onclick="show('orders')">⏳ Rămase<b id="drvRemaining">0</b></div>
+<div class="card driver-card">💰 Încasări azi<b id="drvPaid">0 lei</b></div>
+</div>
+<div class="driver-actions">
+<button class="btn" onclick="show('orders')">📋 Livrările mele</button>
+<button class="btn" style="background:#0f766e" onclick="show('map');openOrdersMap()">🗺️ Harta comenzilor</button>
+<button class="btn secondary" onclick="show('orders')">📷 Scanare / AWB</button>
+<button class="btn" style="background:#7c3aed" onclick="show('orders')">💰 Încasări azi</button>
+</div>
+</section>
+<section id="dashboard" class="on"><h2>Dashboard</h2><div class="cards">
+<div class="card">Comenzi<b id="cntOrders">0</b></div><div class="card">Livrate<b id="cntDelivered">0</b></div>
+<div class="card">Șoferi<b id="cntDrivers">0</b></div><div class="card">Vehicule<b id="cntVehicles">0</b></div>
+</div><div class="panel" id="recent"></div></section>
+
+<section id="orders">
+<div class="order-head"><h2>Comenzi</h2><div class="actions"><button class="btn" onclick="toggleForm()">➕ Comandă nouă</button><button class="btn secondary" onclick="document.getElementById('excelOrdersInput').click()">📥 Import Excel</button><button class="btn" style="background:#7c3aed" onclick="downloadSelectedAwbs()">📄 Descarcă AWB PDF</button><button class="btn" style="background:#0f766e" onclick="show('map');openOrdersMap()">🗺️ Comenzi pe hartă</button><input id="excelOrdersInput" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importOrdersExcel(event)"></div></div>
+<div id="excelImportBox" class="form">
+<h3>📥 Import comenzi din Excel</h3>
+<p style="margin-top:0">Coloane recomandate: <b>Cod</b>, <b>Client</b>, <b>Destinatar</b>, <b>Telefon</b>, <b>Adresă</b>, <b>Localitate</b>, <b>Ramburs</b>, <b>Greutate</b>, <b>Șofer</b>. Codul poate lipsi și va fi generat automat.</p>
+<div id="excelImportStatus" class="success"></div><div id="excelImportError" class="error"></div>
+</div>
+<div id="orderForm" class="form">
+<h3>Comandă nouă</h3>
+<div id="orderSuccess" class="success"></div><div id="orderError" class="error"></div>
+<div class="formgrid">
+<div><label>Client</label><select id="clientSel"></select></div>
+<div><label>Șofer</label><select id="driverSel"></select></div>
+<div><label>Destinatar</label><input id="recipient" placeholder="Nume destinatar"></div>
+<div><label>Telefon</label><input id="phone" placeholder="069..."></div>
+<div><label>Adresă</label><input id="address" placeholder="Stradă, număr"></div>
+<div><label>Localitate</label><input id="city" value="Chișinău"></div>
+<div><label>Încasare (lei)</label><input id="cash" type="number" value="0"></div>
+<div><label>Greutate (kg)</label><input id="weight" type="number" step="0.01" value="0"></div>
+</div>
+<div class="actions"><button class="btn" onclick="saveOrder()">Salvează comanda</button><button class="btn secondary" onclick="toggleForm()">Închide</button></div>
+</div>
+<div class="panel" id="ordersTable"></div>
+</section>
+
+<section id="map">
+<h2>🗺️ Comenzi pe hartă</h2>
+<div class="panel">
+  <div class="map-toolbar">
+    <button class="btn" onclick="openOrdersMap()">🔄 Actualizează harta</button>
+    <span id="mapStatus" class="map-status">Se pregătește harta...</span>
+  </div>
+  <div id="ordersMap" style="margin-top:15px"></div>
+  <div class="map-legend"><span><span><i class="dot dot-new"></i> Nouă / În curs</span><span><i class="dot dot-delivered"></i> Livrată</span><span><i class="dot dot-failed"></i> Nereușită</span><span><i class="dot dot-other"></i> Alt status</span></div>
+</div>
+</section>
+
+<section id="clients"><h2>Clienți</h2><div class="panel" id="clientsTable"></div></section>
+<section id="drivers"><h2>🚚 Șoferi</h2>
+<div class="panel">
+  <p style="margin-top:0"><b>Bonus per comandă livrată</b> — stabilește suma acordată șoferului pentru fiecare comandă cu status <b>Livrată</b>.</p>
+  <div id="driversTable"></div>
+</div>
+</section>
+<section id="fuel">
+<h2>⛽ Combustibil</h2>
+<div class="panel">
+<h3>Adaugă alimentare</h3>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+<div><label>Vehicul</label><select id="fuelVehicle"></select></div>
+<div><label>Șofer</label><select id="fuelDriver"></select></div>
+<div><label>Data</label><input type="date" id="fuelDate"></div>
+<div><label>Litri</label><input type="number" step="0.01" id="fuelLiters" placeholder="0"></div>
+<div><label>Preț/litru</label><input type="number" step="0.01" id="fuelPrice" placeholder="0"></div>
+<div><label>Kilometraj</label><input type="number" step="0.1" id="fuelOdometer" placeholder="0"></div>
+</div>
+<div><label>Observații</label><input id="fuelNotes" placeholder="Opțional"></div>
+<button class="btn" onclick="addFuelLog()">➕ Salvează alimentarea</button>
+</div>
+<div class="cards">
+<div class="card">Total litri<b id="fuelTotalLiters">0</b></div>
+<div class="card">Cost combustibil<b id="fuelTotalCost">0 lei</b></div>
+</div>
+<div class="panel" style="display:block">
+<h3>📋 Alimentări înregistrate</h3>
+<div id="fuelTable" style="overflow-x:auto;min-height:60px"></div>
+</div>
+</section>
+
+<section id="expenses">
+<h2>💸 Cheltuieli</h2>
+<div class="panel">
+<h3>Adaugă cheltuială</h3>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+<div><label>Categorie</label><select id="expenseCategory"><option>Salarii</option><option>Combustibil</option><option>Reparații</option><option>Deservire auto</option><option>Asigurare</option><option>Chirie</option><option>Telefon / Internet</option><option>Alte cheltuieli</option></select></div>
+<div><label>Sumă (lei)</label><input type="number" step="0.01" id="expenseAmount" placeholder="0"></div>
+<div><label>Data</label><input type="date" id="expenseDate"></div>
+<div><label>Vehicul</label><select id="expenseVehicle"><option value="">Fără vehicul</option></select></div>
+<div><label>Șofer</label><select id="expenseDriver"><option value="">Fără șofer</option></select></div>
+</div>
+<div><label>Descriere</label><input id="expenseDescription" placeholder="Ex.: salariu luna septembrie"></div>
+<div><label>Observații</label><input id="expenseNotes" placeholder="Opțional"></div>
+<button class="btn" onclick="addExpense()">➕ Salvează cheltuiala</button>
+</div>
+<div class="cards">
+<div class="card">Total cheltuieli<b id="expenseTotal">0 lei</b></div>
+<div class="card">Salarii<b id="expenseSalaries">0 lei</b></div>
+<div class="card">Reparații / auto<b id="expenseAuto">0 lei</b></div>
+<div class="card">Alte cheltuieli<b id="expenseOther">0 lei</b></div>
+</div>
+<div class="panel"><h3>📋 Cheltuieli înregistrate</h3><div id="expensesTable" style="overflow-x:auto;min-height:60px"></div></div>
+</section>
+
+<section id="reports">
+<h2>📊 Rapoarte</h2>
+<div class="panel">
+<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+<div><label>De la</label><input type="date" id="reportFrom"></div>
+<div><label>Până la</label><input type="date" id="reportTo"></div>
+<button class="btn" onclick="setReportPeriod('today')">Azi</button>
+<button class="btn" onclick="setReportPeriod('week')">Săptămâna</button>
+<button class="btn" onclick="setReportPeriod('month')">Luna</button>
+<button class="btn" onclick="renderReport()">Aplică</button>
+</div>
+</div>
+<div class="cards">
+<div class="card">Comenzi<b id="repOrders">0</b></div>
+<div class="card">Livrate<b id="repDelivered">0</b></div>
+<div class="card">Nereușite<b id="repFailed">0</b></div>
+<div class="card">Încasat<b id="repPaid">0 lei</b></div>
+<div class="card">Neîncasat<b id="repUnpaid">0 lei</b></div>
+<div class="card">Venit livrări<b id="repDeliveryRevenue">0 lei</b></div><div class="card">Bonus șoferi<b id="repBonus">0 lei</b></div><div class="card">După bonus<b id="repAfterBonus">0 lei</b></div><div class="card">Profit net<b id="repProfit">0 lei</b></div>
+</div>
+<div class="panel">
+<h3>Detalii pe șofer</h3>
+<div id="reportDrivers"></div>
+</div>
+</section>
+
+<section id="finance">
+<h2>💰 Financiar</h2>
+<div class="cards">
+<div class="card">Venit din livrări<b id="finRevenue">0 lei</b></div><div class="card">Bonus șoferi<b id="finBonus">0 lei</b></div><div class="card">Venit după bonus<b id="finAfterBonus">0 lei</b></div>
+<div class="card">Cheltuieli totale<b id="finExpenses">0 lei</b></div>
+<div class="card">Profit net<b id="finProfit">0 lei</b></div>
+<div class="card">Total încasat<b id="finPaid">0 lei</b></div>
+<div class="card">Total neîncasat<b id="finUnpaid">0 lei</b></div>
+<div class="card">Cash la șoferi<b id="finCash">0 lei</b></div>
+<div class="card">Comenzi plătite<b id="finPaidOrders">0</b></div>
+</div>
+<div class="panel">
+<h3>Încasări pe șofer</h3>
+<div id="driverFinanceTable"></div>
+</div>
+</section>
+
+<section id="vehicles"><h2>🚐 Mașini</h2><div class="cards" id="vehicleCards"></div><div class="panel" id="vehiclesTable"><p style="padding:12px">Se încarcă automobilele...</p></div></section>
+</main></div>
+
+<script>
+"use strict";
+const SUPABASE_URL="https://vroqxrcuqgwhmnacenfo.supabase.co";
+const SUPABASE_KEY="sb_publishable_vVvOwJ7rNnCBKqdTjGd5Tw_QozYFQye";
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let orders=[],clients=[],drivers=[],vehicles=[],fuelLogs=[],expenses=[],currentProfile=null;
+let ordersMap=null, ordersMapMarkers=null, mapOpening=false;
+const $=id=>document.getElementById(id);
+const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+function table(headers,rows){
+ return `<table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>`+
+ rows.map(r=>`<tr>${r.map((c,i)=>{
+   const isHtml=typeof c==="string" && /<(button|a|input|select|option|textarea)\b/i.test(c);
+   return `<td>${isHtml ? c : esc(c)}</td>`;
+ }).join("")}</tr>`).join("")+
+ `</tbody></table>`;
+}
+function show(id){document.querySelectorAll("section").forEach(s=>s.classList.remove("on"));const sec=$(id);if(!sec)return;sec.classList.add("on");if(id==="orders")fillSelects();if(id==="vehicles")renderVehicles();if(id==="map")setTimeout(()=>openOrdersMap(),50);}
+function toggleForm(){$("orderForm").classList.toggle("show");if($("orderForm").classList.contains("show"))fillSelects()}
+function fillSelects(){
+ $("clientSel").innerHTML=clients.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
+ $("driverSel").innerHTML=drivers.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
+}
+async function login(){
+ $("loginError").style.display="none";
+ const email=$("emailInput").value.trim(),password=$("passwordInput").value;
+ if(!email||!password){$("loginError").textContent="Introdu emailul și parola.";$("loginError").style.display="block";return}
+ $("loginBtn").disabled=true;
+ const {data,error}=await db.auth.signInWithPassword({email,password});
+ $("loginBtn").disabled=false;
+ if(error){$("loginError").textContent=error.message;$("loginError").style.display="block";return}
+ const {data:profile,error:profileError}=await db.from("profiles").select("name,role,driver_id").eq("id",data.user.id).maybeSingle();
+ if(profileError){$("loginError").textContent="Profil utilizator: "+profileError.message;$("loginError").style.display="block";return}
+ if(!profile){$("loginError").textContent="Utilizatorul nu are profil în CRM.";$("loginError").style.display="block";return}
+ currentProfile=profile;
+ if(profile.role==='driver'){
+   document.querySelectorAll('.admin-nav').forEach(b=>b.style.display='none');
+   document.querySelectorAll('.driver-only').forEach(b=>b.style.display='block');
+   $('driverName').textContent=profile.name||'Șofer';
+   $('driverHomeNav').style.display='block';
+   $('dashboard').classList.remove('on'); $('driverHome').classList.add('on');
+ } else {
+   document.querySelectorAll('.driver-only').forEach(b=>b.style.display='none');
+ }
+ $("login").style.display="none";$("app").style.display="block";
+ await load();
+}
+$("loginBtn").onclick=login;$("passwordInput").onkeydown=e=>{if(e.key==="Enter")login()};
+async function load(){
+ const [o,c,d,v,f,e]=await Promise.all([
+  db.from("orders").select("*").order("id",{ascending:false}),
+  db.from("clients").select("*").order("id",{ascending:false}),
+  db.from("drivers").select("*").order("id",{ascending:false}),
+  db.from("vehicles").select("*").order("id",{ascending:true}),
+  db.from("fuel_logs").select("*").order("date",{ascending:false}),
+  db.from("expenses").select("*").order("date",{ascending:false})
+ ]);
+ if(o.error||c.error||d.error||v.error||f.error||e.error){
+  console.error(o.error,c.error,d.error,v.error,f.error,e.error);
+  alert("Eroare la citirea datelor din Supabase.");
+  return;
+}
+ orders=o.data||[];clients=c.data||[];drivers=d.data||[];vehicles=v.data||[];fuelLogs=f.data||[];expenses=e.data||[];
+ render();
+ renderDriverDashboard();
+ renderFuel();
+ renderExpenses();
+ if(!$("reportFrom").value){setReportPeriod("today");}
+}
+function localDateInput(d){
+ const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");
+ return `${y}-${m}-${day}`;
+}
+function setReportPeriod(type){
+ const now=new Date();
+ let from=new Date(now),to=new Date(now);
+ if(type==="week"){
+   const day=now.getDay()||7;
+   from.setDate(now.getDate()-day+1);
+ }else if(type==="month"){
+   from=new Date(now.getFullYear(),now.getMonth(),1);
+ }
+ $("reportFrom").value=localDateInput(from);
+ $("reportTo").value=localDateInput(to);
+ renderReport();
+}
+function renderReport(){
+ const from=$("reportFrom")?.value, to=$("reportTo")?.value;
+ if(!from||!to)return;
+ const start=new Date(from+"T00:00:00");
+ const end=new Date(to+"T23:59:59.999");
+ const rs=orders.filter(x=>{
+   const d=new Date(x.created_at);
+   return d>=start && d<=end;
+ });
+ const delivered=rs.filter(x=>String(x.status||"").toLowerCase()==="livrată").length;
+ const failed=rs.filter(x=>String(x.status||"").toLowerCase()==="nereușită").length;
+ const deliveryRevenue=rs.filter(x=>normText(x.status)==="livrata").reduce((a,x)=>a+Number(x.delivery_price||0),0);
+ const driverBonus=rs.filter(x=>normText(x.status)==="livrata").reduce((a,x)=>a+Number(x.driver_bonus||0),0);
+ const paid=rs.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat").reduce((a,x)=>a+Number(x.paid_amount||0),0);
+ const unpaid=rs.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0);
+ const fs=fuelLogs.filter(x=>{const d=new Date(x.date);return d>=start&&d<=end;});
+ const es=expenses.filter(x=>{const d=new Date(x.date);return d>=start&&d<=end;});
+ const profit=getProfitStats(rs,fs,es);
+ $("repOrders").textContent=rs.length;
+ $("repDelivered").textContent=delivered;
+ $("repFailed").textContent=failed;
+ $("repDeliveryRevenue").textContent=deliveryRevenue.toFixed(2)+" lei";
+ $("repBonus").textContent=driverBonus.toFixed(2)+" lei";
+ $("repAfterBonus").textContent=(deliveryRevenue-driverBonus).toFixed(2)+" lei";
+ $("repPaid").textContent=paid.toFixed(2)+" lei";
+ $("repUnpaid").textContent=unpaid.toFixed(2)+" lei";
+ $("repProfit").textContent=profit.profit.toFixed(2)+" lei";
+ $("reportDrivers").innerHTML=table(
+   ["Șofer","Comenzi","Livrate","Preț livrări","Bonus șofer","După bonus","Nereușite","Încasat","Neîncasat"],
+   drivers.map(d=>{
+     const ds=rs.filter(x=>Number(x.driver_id)===Number(d.id));
+     const pd=ds.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
+     return [
+       d.name, ds.length,
+       ds.filter(x=>String(x.status||"").toLowerCase()==="livrată").length,
+       ds.filter(x=>String(x.status||"").toLowerCase()==="livrată").reduce((a,x)=>a+Number(x.delivery_price||0),0).toFixed(2)+" lei",
+       ds.filter(x=>String(x.status||"").toLowerCase()==="livrată").reduce((a,x)=>a+Number(x.driver_bonus||0),0).toFixed(2)+" lei",
+       ds.filter(x=>String(x.status||"").toLowerCase()==="livrată").reduce((a,x)=>a+Number(x.delivery_price||0)-Number(x.driver_bonus||0),0).toFixed(2)+" lei",
+       ds.filter(x=>String(x.status||"").toLowerCase()==="nereușită").length,
+       pd.reduce((a,x)=>a+Number(x.paid_amount||0),0).toFixed(2)+" lei",
+       ds.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0).toFixed(2)+" lei"
+     ];
+   })
+ );
+}
+function fillFuelSelects(){
+ $("fuelVehicle").innerHTML=vehicles.map(v=>`<option value="${v.id}">${esc(v.plate||v.plate_number||v.registration_number||"Vehicul "+v.id)} — ${esc(v.model||"")}</option>`).join("");
+ $("fuelDriver").innerHTML=drivers.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join("");
+ const now=new Date();
+ if(!$("fuelDate").value) $("fuelDate").value=localDateInput(now);
+}
+async function addFuelLog(){
+ const vehicle_id=Number($("fuelVehicle").value);
+ const driver_id=Number($("fuelDriver").value);
+ const date=$("fuelDate").value;
+ const liters=Number($("fuelLiters").value);
+ const price_per_liter=Number($("fuelPrice").value);
+ const odometer=Number($("fuelOdometer").value||0);
+ const notes=$("fuelNotes").value.trim();
+ if(!vehicle_id||!driver_id||!date||liters<=0||price_per_liter<=0){alert("Completează vehiculul, șoferul, data, litrii și prețul.");return}
+ const {error}=await db.from("fuel_logs").insert({vehicle_id,driver_id,date:date+"T12:00:00",liters,price_per_liter,odometer,notes});
+ if(error){alert("Eroare la salvarea alimentării: "+error.message);return}
+ $("fuelLiters").value="";$("fuelPrice").value="";$("fuelOdometer").value="";$("fuelNotes").value="";
+ await load();
+ alert("Alimentarea a fost salvată.");
+}
+function renderFuel(){
+ if(!$("fuelTable"))return;
+ fillFuelSelects();
+ const totalLiters=fuelLogs.reduce((a,x)=>a+Number(x.liters||0),0);
+ const totalCost=fuelLogs.reduce((a,x)=>a+Number(x.total_cost||Number(x.liters||0)*Number(x.price_per_liter||0)),0);
+ $("fuelTotalLiters").textContent=totalLiters.toFixed(2)+" L";
+ $("fuelTotalCost").textContent=totalCost.toFixed(2)+" lei";
+ $("fuelTable").innerHTML=fuelLogs.length
+ ? table(["Data","Vehicul","Șofer","Litri","Preț/L","Cost","Km","Observații"],fuelLogs.map(x=>[
+   new Date(x.date).toLocaleDateString("ro-RO"),
+   vehicles.find(v=>Number(v.id)===Number(x.vehicle_id))?.plate||("ID "+x.vehicle_id),
+   drivers.find(d=>Number(d.id)===Number(x.driver_id))?.name||("ID "+x.driver_id),
+   Number(x.liters||0).toFixed(2),
+   Number(x.price_per_liter||0).toFixed(2)+" lei",
+   Number(x.total_cost||Number(x.liters||0)*Number(x.price_per_liter||0)).toFixed(2)+" lei",
+   Number(x.odometer||0).toFixed(1),
+   x.notes||"—"
+ ]))
+ : "<p style='padding:12px'>Nu există încă alimentări înregistrate.</p>";
+}
+function fillExpenseSelects(){
+ const vsel=$("expenseVehicle"), dsel=$("expenseDriver");
+ if(vsel) vsel.innerHTML='<option value="">Fără vehicul</option>'+vehicles.map(v=>`<option value="${v.id}">${esc(v.plate||v.plate_number||v.registration_number||"Vehicul "+v.id)} — ${esc(v.model||"")}</option>`).join("");
+ if(dsel) dsel.innerHTML='<option value="">Fără șofer</option>'+drivers.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join("");
+ const now=new Date(); if($("expenseDate")&&!$("expenseDate").value) $("expenseDate").value=localDateInput(now);
+}
+async function addExpense(){
+ const category=$("expenseCategory").value, amount=Number($("expenseAmount").value||0), date=$("expenseDate").value;
+ const vehicle_id=$("expenseVehicle").value?Number($("expenseVehicle").value):null;
+ const driver_id=$("expenseDriver").value?Number($("expenseDriver").value):null;
+ const description=$("expenseDescription").value.trim(), notes=$("expenseNotes").value.trim();
+ if(!category||amount<=0||!date){alert("Completează categoria, suma și data.");return}
+ const {error}=await db.from("expenses").insert({category,description,amount,date:date+"T12:00:00",vehicle_id,driver_id,notes});
+ if(error){alert("Eroare la salvarea cheltuielii: "+error.message);return}
+ $("expenseAmount").value="";$("expenseDescription").value="";$("expenseNotes").value="";
+ await load(); alert("Cheltuiala a fost salvată.");
+}
+function renderExpenses(){
+ if(!$("expensesTable"))return; fillExpenseSelects();
+ const total=expenses.reduce((a,x)=>a+Number(x.amount||0),0);
+ const salaries=expenses.filter(x=>String(x.category||"").toLowerCase()==="salarii").reduce((a,x)=>a+Number(x.amount||0),0);
+ const auto=expenses.filter(x=>["combustibil","reparații","deservire auto","asigurare"].includes(String(x.category||"").toLowerCase())).reduce((a,x)=>a+Number(x.amount||0),0);
+ const other=total-salaries-auto;
+ $("expenseTotal").textContent=total.toFixed(2)+" lei"; $("expenseSalaries").textContent=salaries.toFixed(2)+" lei"; $("expenseAuto").textContent=auto.toFixed(2)+" lei"; $("expenseOther").textContent=other.toFixed(2)+" lei";
+ $("expensesTable").innerHTML=expenses.length?table(["Data","Categorie","Descriere","Sumă","Vehicul","Șofer","Observații"],expenses.map(x=>[new Date(x.date).toLocaleDateString("ro-RO"),x.category,x.description||"—",Number(x.amount||0).toFixed(2)+" lei",vehicles.find(v=>Number(v.id)===Number(x.vehicle_id))?.plate||"—",drivers.find(d=>Number(d.id)===Number(x.driver_id))?.name||"—",x.notes||"—"])):"<p style='padding:12px'>Nu există încă cheltuieli înregistrate.</p>";
+}
+function getProfitStats(orderSet, fuelSet, expenseSet){
+ const revenue=orderSet.filter(x=>normText(x.status)==="livrata").reduce((a,x)=>a+Number(x.delivery_price||0),0);
+ const bonus=orderSet.filter(x=>normText(x.status)==="livrata").reduce((a,x)=>a+Number(x.driver_bonus||0),0);
+ const fuel=fuelSet.reduce((a,x)=>a+Number(x.total_cost||Number(x.liters||0)*Number(x.price_per_liter||0)),0);
+ const other=expenseSet.reduce((a,x)=>a+Number(x.amount||0),0);
+ return {revenue,bonus,fuel,other,totalExpenses:fuel+other+bonus,profit:revenue-fuel-other-bonus};
+}
+function renderVehicles(){
+ const box=$("vehiclesTable"), cards=$("vehicleCards");
+ if(!box)return;
+ if(!vehicles.length){cards.innerHTML="";box.innerHTML="<p style='padding:12px'>Nu există automobile înregistrate în Supabase.</p>";return;}
+ cards.innerHTML=vehicles.map(v=>{const driver=drivers.find(d=>Number(d.id)===Number(v.driver_id));return `<div class="card"><div style="font-size:20px;font-weight:700">🚐 ${esc(v.plate||v.plate_number||v.registration_number||"Vehicul "+v.id)}</div><div>${esc(v.model||"Dacia Dokker")}</div><small>Șofer: ${esc(driver?.name||"Fără șofer")} · Consum: ${Number(v.fuel_consumption ?? 7).toFixed(2)} L/100 km · Km/lună: ${Number(v.monthly_km||0).toFixed(0)}</small></div>`;}).join("");
+ box.innerHTML=table(["ID","Număr","Model","Șofer","Km start","Km final","Km/lună","Consum"],vehicles.map(v=>{const driver=drivers.find(d=>Number(d.id)===Number(v.driver_id));const start=Number(v.start_km||0),end=Number(v.end_km||0),monthly=Number(v.monthly_km||Math.max(0,end-start));return [v.id,v.plate||v.registration_number||"—",v.model||"—",driver?.name||"—",start.toFixed(1),end.toFixed(1),monthly.toFixed(1),Number(v.fuel_consumption ?? 7).toFixed(2)+" L/100 km"]; }));
+}
+async function saveDriverBonus(driverId){
+ const input=$("bonus_"+driverId); if(!input)return;
+ const amount=Math.max(0,Number(input.value||0));
+ const {error}=await db.from("drivers").update({bonus_per_delivery:amount}).eq("id",driverId);
+ if(error){alert("Eroare la salvarea bonusului: "+error.message);return;}
+ const d=drivers.find(x=>Number(x.id)===Number(driverId)); if(d)d.bonus_per_delivery=amount;
+ render();
+ alert("Bonusul pentru "+(d?.name||"șofer")+" a fost salvat: "+amount.toFixed(2)+" lei/comandă.");
+}
+function driverBonusStats(driverId){
+ const d=drivers.find(x=>Number(x.id)===Number(driverId));
+ const amount=Number(d?.bonus_per_delivery||0);
+ const delivered=orders.filter(x=>Number(x.driver_id)===Number(driverId)&&normText(x.status)==='livrata').length;
+ return {amount,delivered,total:amount*delivered};
+}
+function render(){
+ $("cntOrders").textContent=orders.length;
+ $("cntDelivered").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
+ $("cntDrivers").textContent=drivers.length;$("cntVehicles").textContent=vehicles.length;
+ $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["AWB","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code||"—",x.recipient,x.status]));
+ $("ordersTable").innerHTML=table(["AWB","Client","Destinatar","Adresă","Șofer","Preț livrare","Bonus șofer","Cash","Greutate","Status","Motiv","Poză","Plată","Metodă","Acțiuni"],orders.map(x=>[
+ x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",currentProfile?.role!=="driver" ? `<input type="number" min="0" step="0.01" value="${Number(x.delivery_price||0).toFixed(2)}" style="width:90px" onchange="saveOrderFinance(${x.id},this.value,null)">` : Number(x.delivery_price||0).toFixed(2)+" lei",currentProfile?.role!=="driver" ? `<input type="number" min="0" step="0.01" value="${Number(x.driver_bonus||0).toFixed(2)}" style="width:85px" onchange="saveOrderFinance(${x.id},null,this.value)">` : Number(x.driver_bonus||0).toFixed(2)+" lei",x.cash,x.weight,x.status,
+ x.failure_reason||"—",
+ x.proof_photo_url ? `<a href="${esc(x.proof_photo_url)}" target="_blank">📷 Vezi</a>` : "—",
+ x.payment_status||"Neîncasat",
+ x.payment_method||"—",
+ currentProfile?.role==="driver"
+ ? `<button class="btn" style="padding:7px 10px;margin-right:5px;background:#0f766e" onclick="navigateToOrder(${x.id})">📍 Navigare</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="takeDeliveryPhoto(${x.id})">📷 Poză</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="driverDelivered(${x.id})">Livrată</button><button class="btn" style="padding:7px 10px;margin-right:5px;background:#16a34a" onclick="markPaid(${x.id})">💰 Încasat</button><button class="btn" style="padding:7px 10px;margin-right:5px;background:#6b7280" onclick="markUnpaid(${x.id})">❌ Neîncasat</button><button class="btn" style="padding:7px 10px;background:#dc2626" onclick="driverFailed(${x.id})">Nereușită</button>`
+ : "—"]));
+ $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
+ $("driversTable").innerHTML=table(
+   ["ID","Nume","Telefon","Bonus/comandă","Comenzi livrate","Bonus acumulat","Acțiune"],
+   drivers.map(x=>{
+     const bs=driverBonusStats(x.id);
+     return [
+       x.id,
+       x.name,
+       x.phone||"—",
+       `<input id="bonus_${x.id}" type="number" min="0" step="0.01" value="${bs.amount.toFixed(2)}" style="width:130px;margin:0">`,
+       bs.delivered,
+       bs.total.toFixed(2)+" lei",
+       `<button class="btn" style="padding:8px 12px" onclick="saveDriverBonus(${x.id})">💾 Salvează</button>`
+     ];
+   })
+ );
+ renderVehicles();
+
+ const profit=getProfitStats(orders,fuelLogs,expenses);
+ const finBonus=orders.filter(x=>normText(x.status)==="livrata").reduce((a,x)=>a+Number(x.driver_bonus||0),0);
+ const finDeliveryRevenue=orders.filter(x=>normText(x.status)==="livrata").reduce((a,x)=>a+Number(x.delivery_price||0),0);
+ $("finRevenue").textContent=finDeliveryRevenue.toFixed(2)+" lei";
+ $("finBonus").textContent=finBonus.toFixed(2)+" lei";
+ $("finAfterBonus").textContent=(finDeliveryRevenue-finBonus).toFixed(2)+" lei";
+ $("finExpenses").textContent=profit.totalExpenses.toFixed(2)+" lei";
+ $("finProfit").textContent=profit.profit.toFixed(2)+" lei";
+ const paidOrders=orders.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
+ const paidTotal=paidOrders.reduce((a,x)=>a+Number(x.paid_amount||0),0);
+ const unpaidTotal=orders.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat")
+   .reduce((a,x)=>a+Number(x.cash||0),0);
+ const cashTotal=paidOrders.filter(x=>String(x.payment_method||"").toLowerCase()==="cash")
+   .reduce((a,x)=>a+Number(x.paid_amount||0),0);
+ $("finPaid").textContent=paidTotal.toFixed(2)+" lei";
+ $("finUnpaid").textContent=unpaidTotal.toFixed(2)+" lei";
+ $("finCash").textContent=cashTotal.toFixed(2)+" lei";
+ $("finPaidOrders").textContent=paidOrders.length;
+
+ $("driverFinanceTable").innerHTML=table(
+   ["Șofer","Comenzi plătite","Încasat","Cash","Neîncasat"],
+   drivers.map(d=>{
+     const ds=orders.filter(x=>Number(x.driver_id)===Number(d.id));
+     const po=ds.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
+     const paid=po.reduce((a,x)=>a+Number(x.paid_amount||0),0);
+     const cash=po.filter(x=>String(x.payment_method||"").toLowerCase()==="cash").reduce((a,x)=>a+Number(x.paid_amount||0),0);
+     const unpaid=ds.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0);
+     return [d.name,po.length,paid.toFixed(2)+" lei",cash.toFixed(2)+" lei",unpaid.toFixed(2)+" lei"];
+   })
+ );
+}
+function mapStatusClass(status){
+ const s=String(status||"").toLowerCase();
+ if(s.includes("livrat"))return "delivered";
+ if(s.includes("nereușit")||s.includes("nereusit"))return "failed";
+ if(s.includes("nou")||s.includes("curs"))return "new";
+ return "other";
+}
+function markerIcon(status){
+ const cls=mapStatusClass(status);
+ const bg=cls==="delivered"?"#16a34a":cls==="failed"?"#dc2626":cls==="new"?"#2563eb":"#64748b";
+ return L.divIcon({className:"",html:`<div style="width:18px;height:18px;border-radius:50%;background:${bg};border:3px solid #fff;box-shadow:0 1px 6px #0006"></div>`,iconSize:[18,18],iconAnchor:[9,9],popupAnchor:[0,-8]});
+}
+async function geocodeOrder(order){
+  if(Number.isFinite(Number(order.latitude))&&Number.isFinite(Number(order.longitude)))
+    return {lat:Number(order.latitude),lon:Number(order.longitude),saved:false};
+  const queries=[];
+  const address=String(order.address||'').trim();
+  const city=String(order.city||'').trim();
+  if(address&&city) queries.push(`${address}, ${city}, Moldova`);
+  if(address) queries.push(`${address}, Moldova`);
+  if(city) queries.push(`${city}, Moldova`);
+  for(const q of queries){
+    try{
+      const url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=md&accept-language=ro&q='+encodeURIComponent(q);
+      const res=await fetch(url);
+      if(!res.ok) continue;
+      const data=await res.json();
+      if(!Array.isArray(data)||!data.length) continue;
+      const lat=Number(data[0].lat),lon=Number(data[0].lon);
+      if(!Number.isFinite(lat)||!Number.isFinite(lon)) continue;
+      const {error}=await db.from('orders').update({latitude:lat,longitude:lon}).eq('id',order.id);
+      order.latitude=lat; order.longitude=lon;
+      return {lat,lon,saved:!error,query:q,exact:queries.indexOf(q)===0};
+    }catch(e){ console.warn('Geocodare:',q,e); }
+  }
+  return null;
+}
+async function openOrdersMap(){
+  const box=$('ordersMap'), status=$('mapStatus');
+  if(!box||mapOpening)return;
+  mapOpening=true;
+  try{
+    if(!window.L){status.textContent='Harta nu s-a încărcat. Reîncarcă pagina.';return;}
+    status.textContent='Se încarcă comenzile...';
+    const {data:freshOrders,error}=await db.from('orders').select('*').order('id',{ascending:false});
+    if(error) throw error;
+    orders=freshOrders||[];
+    if(!ordersMap){
+      ordersMap=L.map(box).setView([47.15,28.6],7.5);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(ordersMap);
+      ordersMapMarkers=L.layerGroup().addTo(ordersMap);
+    }else{
+      ordersMap.invalidateSize();
+      ordersMapMarkers.clearLayers();
+    }
+    const points=[]; let located=0,missing=0,geocoded=0;
+    const total=orders.length;
+    for(let i=0;i<total;i++){
+      const o=orders[i];
+      status.textContent=`Localizez comenzile: ${i+1}/${total} din ${total}...`;
+      const wasMissing=!(Number.isFinite(Number(o.latitude))&&Number.isFinite(Number(o.longitude)));
+      const point=await geocodeOrder(o);
+      if(point){
+        located++; if(wasMissing)geocoded++;
+        const client=clients.find(c=>Number(c.id)===Number(o.client_id));
+        const driver=drivers.find(d=>Number(d.id)===Number(o.driver_id));
+        const addressText=[o.address,o.city].filter(Boolean).join(', ');
+        const popup=`<div style="min-width:240px"><b>${esc(o.code||'Comandă')}</b><br><b>Client:</b> ${esc(client?.name||'—')}<br><b>Destinatar:</b> ${esc(o.recipient||'—')}<br><b>Telefon:</b> ${esc(o.phone||'—')}<br><b>Adresă:</b> ${esc(addressText||'—')}<br><b>Ramburs:</b> ${Number(o.cash||0).toFixed(2)} lei<br><b>Șofer:</b> ${esc(driver?.name||'—')}<br><b>Status:</b> ${esc(o.status||'—')}<br><br><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}" target="_blank">📍 Navigare</a></div>`;
+        L.marker([point.lat,point.lon],{icon:markerIcon(o.status)}).bindPopup(popup).addTo(ordersMapMarkers);
+        points.push([point.lat,point.lon]);
+      }else missing++;
+      if(wasMissing && i<total-1) await new Promise(r=>setTimeout(r,1100));
+    }
+    if(points.length===1) ordersMap.setView(points[0],15);
+    else if(points.length>1) ordersMap.fitBounds(points,{padding:[30,30],maxZoom:13});
+    status.textContent=`${located} din ${total} comenzi sunt pe hartă${geocoded?` · ${geocoded} localizate automat`:''}${missing?` · ${missing} fără coordonate`:''}.`;
+    ordersMap.invalidateSize();
+  }catch(e){
+    console.error(e);
+    status.textContent='Eroare la încărcarea hărții: '+(e?.message||e);
+  }finally{ mapOpening=false; }
+}
+function navigateToOrder(orderId){
+ const order=orders.find(x=>Number(x.id)===Number(orderId));
+ if(!order){alert("Comanda nu a fost găsită.");return}
+ const destination=[order.address,order.city].filter(Boolean).join(", ");
+ if(!destination){alert("Comanda nu are adresă.");return}
+ window.open("https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(destination),"_blank");
+}
+function takeDeliveryPhoto(orderId){
+ const input=document.createElement("input");
+ input.type="file";
+ input.accept="image/*";
+ input.capture="environment";
+ input.onchange=async()=>{
+   const file=input.files?.[0];
+   if(!file)return;
+   const {data,error}=await db.storage.from("delivery-proofs").upload(
+     `order-${orderId}-${Date.now()}.${(file.name.split(".").pop()||"jpg")}`,
+     file,{upsert:false}
+   );
+   if(error){alert("Eroare la încărcarea pozei: "+error.message);return}
+   const {data:urlData}=db.storage.from("delivery-proofs").getPublicUrl(data.path);
+   const {error:updateError}=await db.from("orders").update({proof_photo_url:urlData.publicUrl}).eq("id",orderId);
+   if(updateError){alert("Poza s-a încărcat, dar nu s-a putut salva la comandă: "+updateError.message);return}
+   await load();
+   alert("Poza a fost salvată.");
+ };
+ input.click();
+}
+async function markPaid(orderId){
+ const order=orders.find(x=>Number(x.id)===Number(orderId));
+ if(!order)return;
+ const amount=prompt("Suma încasată:", String(order.cash??0));
+ if(amount===null)return;
+ const paid=Number(amount.replace(",","."));
+ if(!Number.isFinite(paid)||paid<0){alert("Suma nu este validă.");return}
+ const method=prompt("Metoda de plată: Cash / Card / Transfer","Cash");
+ if(method===null)return;
+ const normalized=method.trim();
+ if(!normalized){alert("Introdu metoda de plată.");return}
+ const {error}=await db.from("orders").update({
+   payment_status:"Încasat",
+   payment_method:normalized,
+   paid_amount:paid
+ }).eq("id",orderId);
+ if(error){alert("Eroare la încasare: "+error.message);return}
+ await load();
+}
+async function markUnpaid(orderId){
+ const {error}=await db.from("orders").update({
+   payment_status:"Neîncasat",
+   payment_method:null,
+   paid_amount:0
+ }).eq("id",orderId);
+ if(error){alert("Eroare: "+error.message);return}
+ await load();
+}
+async function driverDelivered(orderId){
+ const {error}=await db.from("orders").update({status:"Livrată"}).eq("id",orderId);
+ if(error){alert("Eroare: "+error.message);return} await load();
+}
+async function driverFailed(orderId){
+ const reason=prompt("Motivul livrării nereușite:");
+ if(reason===null)return;
+ if(!reason.trim()){alert("Introdu motivul.");return}
+ const {error}=await db.from("orders").update({
+  status:"Nereușită",
+  failure_reason:reason.trim()
+ }).eq("id",orderId);
+ if(error){alert("Eroare: "+error.message);return}
+ await load();
+}
+
+function normText(v){return String(v??"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");}
+function pickCell(row,aliases){const keys=Object.keys(row);for(const a of aliases){const n=normText(a);const k=keys.find(x=>normText(x)===n);if(k!==undefined)return row[k];}for(const a of aliases){const n=normText(a);const k=keys.find(x=>normText(x).includes(n));if(k!==undefined)return row[k];}return "";}
+function makeOrderCode(){const d=new Date();return `CTG-${String(d.getFullYear()).slice(-2)}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}-${String(Date.now()).slice(-6)}${Math.floor(Math.random()*90+10)}`;}
+async function importOrdersExcel(event){
+ const file=event.target.files?.[0]; event.target.value=""; if(!file)return;
+ const box=$("excelImportBox"), ok=$("excelImportStatus"), err=$("excelImportError"); box.classList.add("show"); ok.style.display="none"; err.style.display="none";
+ try{
+  const data=await file.arrayBuffer(); const wb=XLSX.read(data,{type:"array"}); const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{defval:""}); if(!rows.length)throw new Error("Fișierul Excel nu conține rânduri de comenzi.");
+
+  // Reload clients/drivers directly from Supabase so the importer always uses current data.
+  const [{data:dbClients,error:cErr},{data:dbDrivers,error:dErr}]=await Promise.all([
+   db.from("clients").select("id,name").order("id"),
+   db.from("drivers").select("id,name").order("id")
+  ]);
+  if(cErr)throw cErr; if(dErr)throw dErr;
+  const currentClients=dbClients||[], currentDrivers=dbDrivers||[];
+  const clientMap=new Map(currentClients.map(c=>[normText(c.name),c]));
+  const driverMap=new Map(currentDrivers.map(d=>[normText(d.name),d]));
+  const valid=[], problems=[];
+  rows.forEach((r,i)=>{
+   const clientName=String(pickCell(r,["Client","Nume client","Expeditor","Beneficiar"])).trim();
+   const recipient=String(pickCell(r,["Destinatar","Recipient","Nume destinatar"])).trim();
+   const address=String(pickCell(r,["Adresă","Adresa","Address"])).trim();
+   const phone=String(pickCell(r,["Telefon","Phone","Tel"])).trim();
+   const city=String(pickCell(r,["Localitate","Oraș","Oras","City"])||"Chișinău").trim();
+   const driverName=String(pickCell(r,["Șofer","Sofer","Driver","Curier"])).trim();
+   const code=String(pickCell(r,["Cod / AWB","Cod","Cod colet","Tracking No","AWB","Code"])).trim();
+   const cash=Number(String(pickCell(r,["Ramburs","Cash","Încasare","Incasare"])).replace(/[^0-9,.-]/g,"").replace(",",".")||0);
+   const weight=Number(String(pickCell(r,["Greutate","Weight"])).replace(/[^0-9,.-]/g,"").replace(",",".")||0);
+   const client=clientMap.get(normText(clientName)); const driver=driverMap.get(normText(driverName));
+   if(!clientName||!client){problems.push(`Rândul ${i+2}: clientul „${clientName||"(lipsă)"}” nu există în CRM.`);return}
+   if(!recipient||!address){problems.push(`Rândul ${i+2}: lipsesc Destinatar sau Adresă.`);return}
+   if(!driverName||!driver){problems.push(`Rândul ${i+2}: șoferul „${driverName||"(lipsă)"}” nu există în CRM.`);return}
+   valid.push({...((code)?{code}:{}),client_id:client.id,recipient,phone,address,city,cash:Number.isFinite(cash)?cash:0,weight:Number.isFinite(weight)?weight:0,driver_id:driver.id,status:"Nouă",delivery_price:Number(client.tariff||0),driver_bonus:Number(driver.bonus_per_delivery||0)});
+  });
+  if(!valid.length){
+   const detail=problems.length?"\n\n"+problems.join("\n"):"";
+   throw new Error("Nu există rânduri valide pentru import."+detail);
+  }
+  const {error}=await db.from("orders").insert(valid); if(error)throw error;
+  ok.textContent=`Import finalizat: ${valid.length} comenzi adăugate.`+(problems.length?` ${problems.length} rânduri ignorate.`:""); ok.style.display="block";
+  if(problems.length){err.innerHTML="<b>Rânduri ignorate:</b><br>"+problems.map(esc).join("<br>");err.style.display="block";}
+  await load();
+ }catch(e){err.textContent="Eroare la import: "+(e?.message||e);err.style.display="block";}
+}
+async function saveOrderFinance(orderId, deliveryPrice, driverBonus){
+ const patch={};
+ if(deliveryPrice!==null) patch.delivery_price=Math.max(0,Number(deliveryPrice||0));
+ if(driverBonus!==null) patch.driver_bonus=Math.max(0,Number(driverBonus||0));
+ const {error}=await db.from("orders").update(patch).eq("id",orderId);
+ if(error){alert("Eroare la salvare: "+error.message);return;}
+ const o=orders.find(x=>Number(x.id)===Number(orderId)); if(o)Object.assign(o,patch);
+ render();
+}
+async function saveOrder(){
+ $("orderError").style.display="none";$("orderSuccess").style.display="none";
+ const client_id=Number($("clientSel").value),driver_id=Number($("driverSel").value);
+ const recipient=$("recipient").value.trim(),phone=$("phone").value.trim(),address=$("address").value.trim(),city=$("city").value.trim()||"Chișinău";
+ const cash=Number($("cash").value||0),weight=Number($("weight").value||0);
+ if(!client_id||!driver_id||!recipient||!address){$("orderError").textContent="Completează Client, Șofer, Destinatar și Adresă.";$("orderError").style.display="block";return}
+ const client=clients.find(c=>Number(c.id)===client_id); const driver=drivers.find(d=>Number(d.id)===driver_id); const delivery_price=Number(client?.tariff||0); const driver_bonus=Number(driver?.bonus_per_delivery||0);
+ const {data:newOrder,error}=await db.from("orders").insert({client_id,recipient,phone,address,city,cash,weight,driver_id,status:"Nouă",delivery_price,driver_bonus}).select("code").single();
+ if(error){$("orderError").textContent=error.message;$("orderError").style.display="block";return}
+ $("recipient").value="";$("phone").value="";$("address").value="";$("cash").value="0";$("weight").value="0";
+ $("orderSuccess").textContent="Comanda "+(newOrder?.code||"fără AWB")+" a fost salvată."; $("orderSuccess").style.display="block";
+ await load();
+}
+function renderDriverDashboard(){
+ if(currentProfile?.role!=='driver')return;
+ const mine=orders.filter(x=>Number(x.driver_id)===Number(currentProfile.driver_id));
+ const start=new Date(); start.setHours(0,0,0,0); const end=new Date(); end.setHours(23,59,59,999);
+ const today=mine.filter(x=>{const d=new Date(x.created_at);return d>=start&&d<=end});
+ const delivered=today.filter(x=>normText(x.status)==='livrata').length;
+ const remaining=today.filter(x=>normText(x.status)!=='livrata'&&normText(x.status)!=='nereusita').length;
+ const paid=today.filter(x=>normText(x.payment_status)==='incasat').reduce((a,x)=>a+Number(x.paid_amount||0),0);
+ $('drvTotal').textContent=today.length; $('drvDelivered').textContent=delivered; $('drvRemaining').textContent=remaining; $('drvPaid').textContent=paid.toFixed(2)+' lei';
+}
+async function logout(){await db.auth.signOut();location.reload()}
+(async()=>{const {data}=await db.auth.getSession();if(data.session){
+ const {data:profile}=await db.from('profiles').select('name,role,driver_id').eq('id',data.session.user.id).maybeSingle();
+ currentProfile=profile||null;
+ if(profile?.role==='driver'){document.querySelectorAll('.admin-nav').forEach(b=>b.style.display='none');document.querySelectorAll('.driver-only').forEach(b=>b.style.display='block');$('driverName').textContent=profile.name||'Șofer';$('dashboard').classList.remove('on');$('driverHome').classList.add('on');}
+ $("login").style.display="none";$("app").style.display="block";await load(); if(profile?.role==='driver')renderDriverDashboard();
+ }})();
+</script>
+</body></html>
