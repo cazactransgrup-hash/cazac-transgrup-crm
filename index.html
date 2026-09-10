@@ -380,8 +380,8 @@ function render(){
  $("cntOrders").textContent=orders.length;
  $("cntDelivered").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
  $("cntDrivers").textContent=drivers.length;$("cntVehicles").textContent=vehicles.length;
- $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["Cod","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code,x.recipient,x.status]));
- $("ordersTable").innerHTML=table(["Cod","Client","Destinatar","Adresă","Șofer","Cash","Greutate","Status","Motiv","Poză","Plată","Metodă","Acțiuni"],orders.map(x=>[
+ $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["AWB","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code||"—",x.recipient,x.status]));
+ $("ordersTable").innerHTML=table(["AWB","Client","Destinatar","Adresă","Șofer","Cash","Greutate","Status","Motiv","Poză","Plată","Metodă","Acțiuni"],orders.map(x=>[
  x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",x.cash,x.weight,x.status,
  x.failure_reason||"—",
  x.proof_photo_url ? `<a href="${esc(x.proof_photo_url)}" target="_blank">📷 Vezi</a>` : "—",
@@ -602,14 +602,14 @@ async function importOrdersExcel(event){
    const phone=String(pickCell(r,["Telefon","Phone","Tel"])).trim();
    const city=String(pickCell(r,["Localitate","Oraș","Oras","City"])||"Chișinău").trim();
    const driverName=String(pickCell(r,["Șofer","Sofer","Driver","Curier"])).trim();
-   const code=String(pickCell(r,["Cod / AWB","Cod","Cod colet","Tracking No","AWB","Code"])).trim()||makeOrderCode();
+   const code=String(pickCell(r,["Cod / AWB","Cod","Cod colet","Tracking No","AWB","Code"])).trim();
    const cash=Number(String(pickCell(r,["Ramburs","Cash","Încasare","Incasare"])).replace(/[^0-9,.-]/g,"").replace(",",".")||0);
    const weight=Number(String(pickCell(r,["Greutate","Weight"])).replace(/[^0-9,.-]/g,"").replace(",",".")||0);
    const client=clientMap.get(normText(clientName)); const driver=driverMap.get(normText(driverName));
    if(!clientName||!client){problems.push(`Rândul ${i+2}: clientul „${clientName||"(lipsă)"}” nu există în CRM.`);return}
    if(!recipient||!address){problems.push(`Rândul ${i+2}: lipsesc Destinatar sau Adresă.`);return}
    if(!driverName||!driver){problems.push(`Rândul ${i+2}: șoferul „${driverName||"(lipsă)"}” nu există în CRM.`);return}
-   valid.push({code,client_id:client.id,recipient,phone,address,city,cash:Number.isFinite(cash)?cash:0,weight:Number.isFinite(weight)?weight:0,driver_id:driver.id,status:"Nouă"});
+   valid.push({...((code)?{code}:{}),client_id:client.id,recipient,phone,address,city,cash:Number.isFinite(cash)?cash:0,weight:Number.isFinite(weight)?weight:0,driver_id:driver.id,status:"Nouă"});
   });
   if(!valid.length){
    const detail=problems.length?"\n\n"+problems.join("\n"):"";
@@ -627,11 +627,10 @@ async function saveOrder(){
  const recipient=$("recipient").value.trim(),phone=$("phone").value.trim(),address=$("address").value.trim(),city=$("city").value.trim()||"Chișinău";
  const cash=Number($("cash").value||0),weight=Number($("weight").value||0);
  if(!client_id||!driver_id||!recipient||!address){$("orderError").textContent="Completează Client, Șofer, Destinatar și Adresă.";$("orderError").style.display="block";return}
- const d=new Date(),code=`CTG-${String(d.getFullYear()).slice(-2)}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}-${String(Date.now()).slice(-6)}`;
- const {error}=await db.from("orders").insert({code,client_id,recipient,phone,address,city,cash,weight,driver_id,status:"Nouă"});
+ const {data:newOrder,error}=await db.from("orders").insert({client_id,recipient,phone,address,city,cash,weight,driver_id,status:"Nouă"}).select("code").single();
  if(error){$("orderError").textContent=error.message;$("orderError").style.display="block";return}
  $("recipient").value="";$("phone").value="";$("address").value="";$("cash").value="0";$("weight").value="0";
- $("orderSuccess").textContent="Comanda "+code+" a fost salvată."; $("orderSuccess").style.display="block";
+ $("orderSuccess").textContent="Comanda "+(newOrder?.code||"fără AWB")+" a fost salvată."; $("orderSuccess").style.display="block";
  await load();
 }
 async function logout(){await db.auth.signOut();location.reload()}
