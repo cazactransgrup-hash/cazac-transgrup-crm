@@ -415,6 +415,16 @@ function renderVehicles(){
  cards.innerHTML=vehicles.map(v=>{const driver=drivers.find(d=>Number(d.id)===Number(v.driver_id));return `<div class="card"><div style="font-size:20px;font-weight:700">🚐 ${esc(v.plate||v.plate_number||v.registration_number||"Vehicul "+v.id)}</div><div>${esc(v.model||"Dacia Dokker")}</div><small>Șofer: ${esc(driver?.name||"Fără șofer")} · Consum: ${Number(v.fuel_consumption ?? 7).toFixed(2)} L/100 km · Km/lună: ${Number(v.monthly_km||0).toFixed(0)}</small></div>`;}).join("");
  box.innerHTML=table(["ID","Număr","Model","Șofer","Km start","Km final","Km/lună","Consum"],vehicles.map(v=>{const driver=drivers.find(d=>Number(d.id)===Number(v.driver_id));const start=Number(v.start_km||0),end=Number(v.end_km||0),monthly=Number(v.monthly_km||Math.max(0,end-start));return [v.id,v.plate||v.registration_number||"—",v.model||"—",driver?.name||"—",start.toFixed(1),end.toFixed(1),monthly.toFixed(1),Number(v.fuel_consumption ?? 7).toFixed(2)+" L/100 km"]; }));
 }
+async function saveClientDeliveryPrice(clientId){
+ const input=$("client_price_"+clientId); if(!input)return;
+ const amount=Math.max(0,Number(input.value||0));
+ const {error}=await db.from("clients").update({tariff:amount,fixed_tariff:true,fixed_tariff_amount:amount}).eq("id",clientId);
+ if(error){alert("Eroare la salvarea prețului de livrare: "+error.message);return;}
+ const c=clients.find(x=>Number(x.id)===Number(clientId));
+ if(c){c.tariff=amount;c.fixed_tariff=true;c.fixed_tariff_amount=amount;}
+ render();
+ alert("Prețul de livrare pentru "+(c?.name||"client")+" a fost salvat: "+amount.toFixed(2)+" lei/comandă.");
+}
 async function saveDriverBonus(driverId){
  const input=$("bonus_"+driverId); if(!input)return;
  const amount=Math.max(0,Number(input.value||0));
@@ -436,7 +446,7 @@ function render(){
  $("cntDrivers").textContent=drivers.length;$("cntVehicles").textContent=vehicles.length;
  $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["AWB","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code||"—",x.recipient,x.status]));
  $("ordersTable").innerHTML=table(["AWB","Client","Destinatar","Adresă","Șofer","Preț livrare","Bonus șofer","Cash","Greutate","Status","Motiv","Poză","Plată","Metodă","Acțiuni"],orders.map(x=>[x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",`<input type="number" min="0" step="0.01" value="${Number(x.delivery_price||0).toFixed(2)}" style="width:95px" onchange="saveOrderFinancial(${x.id},'delivery_price',this.value)">`,`<input type="number" min="0" step="0.01" value="${Number(x.driver_bonus||0).toFixed(2)}" style="width:95px" onchange="saveOrderFinancial(${x.id},'driver_bonus',this.value)">`,x.cash,x.weight,x.status,x.failure_reason||"—",x.proof_photo_url ? `<a href="${esc(x.proof_photo_url)}" target="_blank">📷 Vezi</a>` : "—",x.payment_status||"Neîncasat",x.payment_method||"—",currentProfile?.role==="driver" ? `<button class="btn" style="padding:7px 10px;margin-right:5px;background:#0f766e" onclick="navigateToOrder(${x.id})">📍 Navigare</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="takeDeliveryPhoto(${x.id})">📷 Poză</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="driverDelivered(${x.id})">Livrată</button><button class="btn" style="padding:7px 10px;margin-right:5px;background:#16a34a" onclick="markPaid(${x.id})">💰 Încasat</button><button class="btn" style="padding:7px 10px;margin-right:5px;background:#6b7280" onclick="markUnpaid(${x.id})">❌ Neîncasat</button><button class="btn" style="padding:7px 10px;background:#dc2626" onclick="driverFailed(${x.id})">Nereușită</button>` : "—"]));
- $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
+ $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Preț livrare","Acțiune"],clients.map(x=>[x.id,x.name,x.phone||"—",`<input id="client_price_${x.id}" type="number" min="0" step="0.01" value="${Number(x.fixed_tariff && x.fixed_tariff_amount!=null ? x.fixed_tariff_amount : (x.tariff||0)).toFixed(2)}" style="width:120px;margin:0">`, `<button class="btn" style="padding:8px 12px" onclick="saveClientDeliveryPrice(${x.id})">💾 Salvează</button>`]));
  $("driversTable").innerHTML=table(
    ["ID","Nume","Telefon","Bonus/comandă","Comenzi livrate","Bonus acumulat","Acțiune"],
    drivers.map(x=>{
