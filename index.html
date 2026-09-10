@@ -170,6 +170,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <button class="btn" onclick="setReportPeriod('today')">Azi</button>
 <button class="btn" onclick="setReportPeriod('week')">Săptămâna</button>
 <button class="btn" onclick="setReportPeriod('month')">Luna</button>
+<label>Client<div><select id="reportClient" onchange="renderReport()"><option value="">Toți clienții</option></select></div></label>
 <button class="btn" onclick="renderReport()">Aplică</button>
 </div>
 </div>
@@ -186,10 +187,20 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <h3>Detalii pe șofer</h3>
 <div id="reportDrivers"></div>
 </div>
+<div class="panel">
+<h3>📦 Comenzi pe client</h3>
+<div id="reportClientOrders"></div>
+</div>
 </section>
 
 <section id="finance">
 <h2>💰 Financiar</h2>
+<div class="panel">
+<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+<label>Client<div><select id="financeClient" onchange="renderFinanceClient()"><option value="">Toți clienții</option></select></div></label>
+<button class="btn" onclick="clearFinanceClient()">Toți clienții</button>
+</div>
+</div>
 <div class="cards">
 <div class="card">Venit din livrări<b id="finRevenue">0 lei</b></div>
 <div class="card">Cheltuieli totale<b id="finExpenses">0 lei</b></div>
@@ -203,6 +214,10 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <div class="panel">
 <h3>Încasări pe șofer</h3>
 <div id="driverFinanceTable"></div>
+</div>
+<div class="panel">
+<h3>📦 Comenzi financiare pe client</h3>
+<div id="financeClientOrders"></div>
 </div>
 </section>
 
@@ -295,14 +310,26 @@ function setReportPeriod(type){
  $("reportTo").value=localDateInput(to);
  renderReport();
 }
+function populateClientFilters(){
+ const selects=[$("reportClient"),$("financeClient")].filter(Boolean);
+ const opts='<option value="">Toți clienții</option>'+clients.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ro')).map(c=>`<option value="${c.id}">${esc(c.name||'Client '+c.id)}</option>`).join('');
+ selects.forEach(sel=>{const v=sel.value;sel.innerHTML=opts;if(v&&clients.some(c=>String(c.id)===String(v)))sel.value=v;});
+}
+function clientOrdersTable(list){
+ if(!list.length)return "<p style='padding:12px'>Nu există comenzi pentru clientul selectat.</p>";
+ return table(["AWB","Client","Destinatar","Adresă","Șofer","Preț livrare","Bonus șofer","Cash","Status","Data"],list.map(x=>[x.code||'—',clients.find(c=>Number(c.id)===Number(x.client_id))?.name||'—',x.recipient||'—',[x.address,x.city].filter(Boolean).join(', ')||'—',drivers.find(d=>Number(d.id)===Number(x.driver_id))?.name||'—',Number(x.delivery_price||0).toFixed(2)+' lei',Number(x.driver_bonus||0).toFixed(2)+' lei',Number(x.cash||0).toFixed(2)+' lei',x.status||'—',x.created_at?new Date(x.created_at).toLocaleString('ro-RO'):'—']));
+}
+function renderFinanceClient(){const id=$("financeClient")?.value||"";const list=id?orders.filter(x=>String(x.client_id)===String(id)):orders;$("financeClientOrders").innerHTML=clientOrdersTable(list);}
+function clearFinanceClient(){if($("financeClient"))$("financeClient").value='';renderFinanceClient();}
 function renderReport(){
  const from=$("reportFrom")?.value, to=$("reportTo")?.value;
  if(!from||!to)return;
  const start=new Date(from+"T00:00:00");
  const end=new Date(to+"T23:59:59.999");
+ const selectedClient=$("reportClient")?.value||"";
  const rs=orders.filter(x=>{
    const d=new Date(x.created_at);
-   return d>=start && d<=end;
+   return d>=start && d<=end && (!selectedClient || String(x.client_id)===String(selectedClient));
  });
  const delivered=rs.filter(x=>String(x.status||"").toLowerCase()==="livrată").length;
  const failed=rs.filter(x=>String(x.status||"").toLowerCase()==="nereușită").length;
@@ -320,23 +347,22 @@ function renderReport(){
  $("repBonus").textContent=reportBonus.toFixed(2)+" lei";
  $("repProfit").textContent=profit.profit.toFixed(2)+" lei";
  $("reportDrivers").innerHTML=table(
-   ["Șofer","Comenzi","Livrate","Nereușite","Încasat","Neîncasat","Bonus / livrare","Bonus total"],
+   ["Șofer","Comenzi","Livrate","Nereușite","Încasat","Neîncasat","Bonus/livrare","Bonus total"],
    drivers.map(d=>{
      const ds=rs.filter(x=>Number(x.driver_id)===Number(d.id));
      const pd=ds.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
-     const delivered=ds.filter(x=>normText(x.status)==="livrata");
-     const bonusPer=Number(d.bonus_per_delivery||0);
-     const bonusTotal=delivered.reduce((a,x)=>a+Number(x.driver_bonus!=null ? x.driver_bonus : bonusPer),0);
      return [
-       d.name, ds.length, delivered.length,
+       d.name, ds.length,
+       ds.filter(x=>String(x.status||"").toLowerCase()==="livrată").length,
        ds.filter(x=>String(x.status||"").toLowerCase()==="nereușită").length,
        pd.reduce((a,x)=>a+Number(x.paid_amount||0),0).toFixed(2)+" lei",
        ds.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0).toFixed(2)+" lei",
-       bonusPer.toFixed(2)+" lei",
-       bonusTotal.toFixed(2)+" lei"
+       Number(d.bonus_per_delivery||0).toFixed(2)+" lei",
+       ds.filter(x=>normText(x.status)==="livrata").reduce((a,x)=>a+Number(x.driver_bonus||0),0).toFixed(2)+" lei"
      ];
    })
  );
+ $("reportClientOrders").innerHTML=clientOrdersTable(rs);
 }
 function fillFuelSelects(){
  $("fuelVehicle").innerHTML=vehicles.map(v=>`<option value="${v.id}">${esc(v.plate||v.plate_number||v.registration_number||"Vehicul "+v.id)} — ${esc(v.model||"")}</option>`).join("");
@@ -419,16 +445,6 @@ function renderVehicles(){
  cards.innerHTML=vehicles.map(v=>{const driver=drivers.find(d=>Number(d.id)===Number(v.driver_id));return `<div class="card"><div style="font-size:20px;font-weight:700">🚐 ${esc(v.plate||v.plate_number||v.registration_number||"Vehicul "+v.id)}</div><div>${esc(v.model||"Dacia Dokker")}</div><small>Șofer: ${esc(driver?.name||"Fără șofer")} · Consum: ${Number(v.fuel_consumption ?? 7).toFixed(2)} L/100 km · Km/lună: ${Number(v.monthly_km||0).toFixed(0)}</small></div>`;}).join("");
  box.innerHTML=table(["ID","Număr","Model","Șofer","Km start","Km final","Km/lună","Consum"],vehicles.map(v=>{const driver=drivers.find(d=>Number(d.id)===Number(v.driver_id));const start=Number(v.start_km||0),end=Number(v.end_km||0),monthly=Number(v.monthly_km||Math.max(0,end-start));return [v.id,v.plate||v.registration_number||"—",v.model||"—",driver?.name||"—",start.toFixed(1),end.toFixed(1),monthly.toFixed(1),Number(v.fuel_consumption ?? 7).toFixed(2)+" L/100 km"]; }));
 }
-async function saveClientDeliveryPrice(clientId){
- const input=$("client_price_"+clientId); if(!input)return;
- const amount=Math.max(0,Number(input.value||0));
- const {error}=await db.from("clients").update({tariff:amount,fixed_tariff:true,fixed_tariff_amount:amount}).eq("id",clientId);
- if(error){alert("Eroare la salvarea prețului de livrare: "+error.message);return;}
- const c=clients.find(x=>Number(x.id)===Number(clientId));
- if(c){c.tariff=amount;c.fixed_tariff=true;c.fixed_tariff_amount=amount;}
- render();
- alert("Prețul de livrare pentru "+(c?.name||"client")+" a fost salvat: "+amount.toFixed(2)+" lei/comandă.");
-}
 async function saveDriverBonus(driverId){
  const input=$("bonus_"+driverId); if(!input)return;
  const amount=Math.max(0,Number(input.value||0));
@@ -450,7 +466,7 @@ function render(){
  $("cntDrivers").textContent=drivers.length;$("cntVehicles").textContent=vehicles.length;
  $("recent").innerHTML="<h3>Ultimele comenzi</h3>"+table(["AWB","Destinatar","Status"],orders.slice(0,8).map(x=>[x.code||"—",x.recipient,x.status]));
  $("ordersTable").innerHTML=table(["AWB","Client","Destinatar","Adresă","Șofer","Preț livrare","Bonus șofer","Cash","Greutate","Status","Motiv","Poză","Plată","Metodă","Acțiuni"],orders.map(x=>[x.code,clients.find(c=>c.id===x.client_id)?.name||"—",x.recipient,x.address,drivers.find(d=>d.id===x.driver_id)?.name||"—",`<input type="number" min="0" step="0.01" value="${Number(x.delivery_price||0).toFixed(2)}" style="width:95px" onchange="saveOrderFinancial(${x.id},'delivery_price',this.value)">`,`<input type="number" min="0" step="0.01" value="${Number(x.driver_bonus||0).toFixed(2)}" style="width:95px" onchange="saveOrderFinancial(${x.id},'driver_bonus',this.value)">`,x.cash,x.weight,x.status,x.failure_reason||"—",x.proof_photo_url ? `<a href="${esc(x.proof_photo_url)}" target="_blank">📷 Vezi</a>` : "—",x.payment_status||"Neîncasat",x.payment_method||"—",currentProfile?.role==="driver" ? `<button class="btn" style="padding:7px 10px;margin-right:5px;background:#0f766e" onclick="navigateToOrder(${x.id})">📍 Navigare</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="takeDeliveryPhoto(${x.id})">📷 Poză</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="driverDelivered(${x.id})">Livrată</button><button class="btn" style="padding:7px 10px;margin-right:5px;background:#16a34a" onclick="markPaid(${x.id})">💰 Încasat</button><button class="btn" style="padding:7px 10px;margin-right:5px;background:#6b7280" onclick="markUnpaid(${x.id})">❌ Neîncasat</button><button class="btn" style="padding:7px 10px;background:#dc2626" onclick="driverFailed(${x.id})">Nereușită</button>` : "—"]));
- $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Preț livrare","Acțiune"],clients.map(x=>[x.id,x.name,x.phone||"—",`<input id="client_price_${x.id}" type="number" min="0" step="0.01" value="${Number(x.fixed_tariff && x.fixed_tariff_amount!=null ? x.fixed_tariff_amount : (x.tariff||0)).toFixed(2)}" style="width:120px;margin:0">`, `<button class="btn" style="padding:8px 12px" onclick="saveClientDeliveryPrice(${x.id})">💾 Salvează</button>`]));
+ $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
  $("driversTable").innerHTML=table(
    ["ID","Nume","Telefon","Bonus/comandă","Comenzi livrate","Bonus acumulat","Acțiune"],
    drivers.map(x=>{
@@ -468,14 +484,16 @@ function render(){
  );
  renderVehicles();
 
- const profit=getProfitStats(orders,fuelLogs,expenses);
+ const financeClientId=$("financeClient")?.value||"";
+ const financeOrders=financeClientId?orders.filter(x=>String(x.client_id)===String(financeClientId)):orders;
+ const profit=getProfitStats(financeOrders,fuelLogs,expenses);
  $("finBonus").textContent=profit.bonus.toFixed(2)+" lei";
  $("finRevenue").textContent=profit.revenue.toFixed(2)+" lei";
  $("finExpenses").textContent=profit.totalExpenses.toFixed(2)+" lei";
  $("finProfit").textContent=profit.profit.toFixed(2)+" lei";
- const paidOrders=orders.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
+ const paidOrders=financeOrders.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
  const paidTotal=paidOrders.reduce((a,x)=>a+Number(x.paid_amount||0),0);
- const unpaidTotal=orders.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat")
+ const unpaidTotal=financeOrders.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat")
    .reduce((a,x)=>a+Number(x.cash||0),0);
  const cashTotal=paidOrders.filter(x=>String(x.payment_method||"").toLowerCase()==="cash")
    .reduce((a,x)=>a+Number(x.paid_amount||0),0);
@@ -485,19 +503,18 @@ function render(){
  $("finPaidOrders").textContent=paidOrders.length;
 
  $("driverFinanceTable").innerHTML=table(
-   ["Șofer","Comenzi plătite","Încasat","Cash","Neîncasat","Livrate","Bonus / livrare","Bonus total"],
+   ["Șofer","Comenzi plătite","Încasat","Cash","Neîncasat"],
    drivers.map(d=>{
-     const ds=orders.filter(x=>Number(x.driver_id)===Number(d.id));
+     const ds=financeOrders.filter(x=>Number(x.driver_id)===Number(d.id));
      const po=ds.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
      const paid=po.reduce((a,x)=>a+Number(x.paid_amount||0),0);
      const cash=po.filter(x=>String(x.payment_method||"").toLowerCase()==="cash").reduce((a,x)=>a+Number(x.paid_amount||0),0);
      const unpaid=ds.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0);
-     const delivered=ds.filter(x=>normText(x.status)==="livrata");
-     const bonusPer=Number(d.bonus_per_delivery||0);
-     const bonusTotal=delivered.reduce((a,x)=>a+Number(x.driver_bonus!=null ? x.driver_bonus : bonusPer),0);
-     return [d.name,po.length,paid.toFixed(2)+" lei",cash.toFixed(2)+" lei",unpaid.toFixed(2)+" lei",delivered.length,bonusPer.toFixed(2)+" lei",bonusTotal.toFixed(2)+" lei"];
+     return [d.name,po.length,paid.toFixed(2)+" lei",cash.toFixed(2)+" lei",unpaid.toFixed(2)+" lei"];
    })
  );
+ $("financeClientOrders").innerHTML=clientOrdersTable(financeOrders);
+ populateClientFilters();
 }
 function mapStatusClass(status){
  const s=String(status||"").toLowerCase();
