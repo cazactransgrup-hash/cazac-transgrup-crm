@@ -6,6 +6,7 @@
 <title>Cazac TransGrup CRM</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <style>
@@ -19,6 +20,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 .order-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.form{display:none;margin-top:15px;padding:18px;background:#f8fafc;border-radius:10px}.form.show{display:block}.formgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.actions{display:flex;gap:10px}.secondary{background:#64748b}.success{color:#067647;background:#ecfdf3;padding:10px;border-radius:8px;display:none;margin-bottom:12px}
 #ordersMap{height:70vh;min-height:520px;border-radius:12px;overflow:hidden}.map-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.map-status{padding:10px 12px;background:#f1f5f9;border-radius:8px;color:#334155}.map-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:14px}.map-legend span{display:inline-flex;align-items:center;gap:6px}.dot{width:11px;height:11px;border-radius:50%;display:inline-block}.dot-new{background:#2563eb}.dot-delivered{background:#16a34a}.dot-failed{background:#dc2626}.dot-other{background:#64748b}
 @media(max-width:800px){.side{width:65px;padding:10px}.side h2{font-size:0}.side h2:after{content:"CTG";font-size:18px}.side button{font-size:0;text-align:center}.side button:before{content:"•";font-size:20px}.main{margin-left:65px;padding:15px}.cards{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}}
+.driver-only{display:none}.driver-card{cursor:pointer;text-align:center;min-height:105px}.driver-card b{display:block;font-size:28px;margin-top:8px}.driver-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.driver-actions button{min-height:64px;font-size:17px}@media(max-width:600px){.driver-actions{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -32,25 +34,42 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 
 <div id="app" class="app">
 <aside class="side"><h2>CTG CRM</h2>
-<button onclick="show('dashboard')">📊 Dashboard</button>
+<button class="admin-nav" onclick="show('dashboard')">📊 Dashboard</button>
 <button onclick="show('orders')">📦 Comenzi</button>
-<button onclick="show('clients')">👥 Clienți</button>
-<button onclick="show('drivers')">🚚 Șoferi</button>
-<button onclick="show('vehicles')">🚐 Vehicule</button>
-<button onclick="show('finance')">💰 Financiar</button>
-<button onclick="show('reports')">📊 Rapoarte</button>
-<button onclick="show('fuel')">⛽ Combustibil</button>
-<button onclick="show('expenses')">💸 Cheltuieli</button>
+<button class="admin-nav" onclick="show('clients')">👥 Clienți</button>
+<button class="admin-nav" onclick="show('drivers')">🚚 Șoferi</button>
+<button class="admin-nav" onclick="show('vehicles')">🚐 Vehicule</button>
+<button class="admin-nav" onclick="show('finance')">💰 Financiar</button>
+<button class="admin-nav" onclick="show('reports')">📊 Rapoarte</button>
+<button class="admin-nav" onclick="show('fuel')">⛽ Combustibil</button>
+<button class="admin-nav" onclick="show('expenses')">💸 Cheltuieli</button>
+<button class="driver-only" onclick="show('driverHome')">🏠 Acasă</button>
+<button class="driver-only" onclick="show('map');openOrdersMap()">🗺️ Hartă</button>
 <button onclick="logout()">↩ Ieșire</button>
 </aside>
 <main class="main">
+<section id="driverHome">
+<h2>👋 Bună ziua, <span id="driverName">Șofer</span></h2>
+<div class="cards">
+<div class="card driver-card" onclick="show('orders')">📦 Livrări azi<b id="drvTotal">0</b></div>
+<div class="card driver-card" onclick="show('orders')">🟢 Livrate<b id="drvDelivered">0</b></div>
+<div class="card driver-card" onclick="show('orders')">⏳ Rămase<b id="drvRemaining">0</b></div>
+<div class="card driver-card">💰 Încasări azi<b id="drvPaid">0 lei</b></div>
+</div>
+<div class="driver-actions">
+<button class="btn" onclick="show('orders')">📋 Livrările mele</button>
+<button class="btn" style="background:#0f766e" onclick="show('map');openOrdersMap()">🗺️ Harta comenzilor</button>
+<button class="btn secondary" onclick="show('orders')">📷 Scanare / AWB</button>
+<button class="btn" style="background:#7c3aed" onclick="show('orders')">💰 Încasări azi</button>
+</div>
+</section>
 <section id="dashboard" class="on"><h2>Dashboard</h2><div class="cards">
 <div class="card">Comenzi<b id="cntOrders">0</b></div><div class="card">Livrate<b id="cntDelivered">0</b></div>
 <div class="card">Șoferi<b id="cntDrivers">0</b></div><div class="card">Vehicule<b id="cntVehicles">0</b></div>
 </div><div class="panel" id="recent"></div></section>
 
 <section id="orders">
-<div class="order-head"><h2>Comenzi</h2><div class="actions"><button class="btn" onclick="toggleForm()">➕ Comandă nouă</button><button class="btn secondary" onclick="document.getElementById('excelOrdersInput').click()">📥 Import Excel</button><button class="btn" style="background:#0f766e" onclick="show('map');openOrdersMap()">🗺️ Comenzi pe hartă</button><input id="excelOrdersInput" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importOrdersExcel(event)"></div></div>
+<div class="order-head"><h2>Comenzi</h2><div class="actions"><button class="btn" onclick="toggleForm()">➕ Comandă nouă</button><button class="btn secondary" onclick="document.getElementById('excelOrdersInput').click()">📥 Import Excel</button><button class="btn" style="background:#7c3aed" onclick="downloadSelectedAwbs()">📄 Descarcă AWB PDF</button><button class="btn" style="background:#0f766e" onclick="show('map');openOrdersMap()">🗺️ Comenzi pe hartă</button><input id="excelOrdersInput" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importOrdersExcel(event)"></div></div>
 <div id="excelImportBox" class="form">
 <h3>📥 Import comenzi din Excel</h3>
 <p style="margin-top:0">Coloane recomandate: <b>Cod</b>, <b>Client</b>, <b>Destinatar</b>, <b>Telefon</b>, <b>Adresă</b>, <b>Localitate</b>, <b>Ramburs</b>, <b>Greutate</b>, <b>Șofer</b>. Codul poate lipsi și va fi generat automat.</p>
@@ -87,7 +106,12 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 </section>
 
 <section id="clients"><h2>Clienți</h2><div class="panel" id="clientsTable"></div></section>
-<section id="drivers"><h2>Șoferi</h2><div class="panel" id="driversTable"></div></section>
+<section id="drivers"><h2>🚚 Șoferi</h2>
+<div class="panel">
+  <p style="margin-top:0"><b>Bonus per comandă livrată</b> — stabilește suma acordată șoferului pentru fiecare comandă cu status <b>Livrată</b>.</p>
+  <div id="driversTable"></div>
+</div>
+</section>
 <section id="fuel">
 <h2>⛽ Combustibil</h2>
 <div class="panel">
@@ -218,6 +242,15 @@ async function login(){
  if(profileError){$("loginError").textContent="Profil utilizator: "+profileError.message;$("loginError").style.display="block";return}
  if(!profile){$("loginError").textContent="Utilizatorul nu are profil în CRM.";$("loginError").style.display="block";return}
  currentProfile=profile;
+ if(profile.role==='driver'){
+   document.querySelectorAll('.admin-nav').forEach(b=>b.style.display='none');
+   document.querySelectorAll('.driver-only').forEach(b=>b.style.display='block');
+   $('driverName').textContent=profile.name||'Șofer';
+   $('driverHomeNav').style.display='block';
+   $('dashboard').classList.remove('on'); $('driverHome').classList.add('on');
+ } else {
+   document.querySelectorAll('.driver-only').forEach(b=>b.style.display='none');
+ }
  $("login").style.display="none";$("app").style.display="block";
  await load();
 }
@@ -238,6 +271,7 @@ async function load(){
 }
  orders=o.data||[];clients=c.data||[];drivers=d.data||[];vehicles=v.data||[];fuelLogs=f.data||[];expenses=e.data||[];
  render();
+ renderDriverDashboard();
  renderFuel();
  renderExpenses();
  if(!$("reportFrom").value){setReportPeriod("today");}
@@ -376,6 +410,21 @@ function renderVehicles(){
  cards.innerHTML=vehicles.map(v=>{const driver=drivers.find(d=>Number(d.id)===Number(v.driver_id));return `<div class="card"><div style="font-size:20px;font-weight:700">🚐 ${esc(v.plate||v.plate_number||v.registration_number||"Vehicul "+v.id)}</div><div>${esc(v.model||"Dacia Dokker")}</div><small>Șofer: ${esc(driver?.name||"Fără șofer")} · Consum: ${Number(v.fuel_consumption ?? 7).toFixed(2)} L/100 km · Km/lună: ${Number(v.monthly_km||0).toFixed(0)}</small></div>`;}).join("");
  box.innerHTML=table(["ID","Număr","Model","Șofer","Km start","Km final","Km/lună","Consum"],vehicles.map(v=>{const driver=drivers.find(d=>Number(d.id)===Number(v.driver_id));const start=Number(v.start_km||0),end=Number(v.end_km||0),monthly=Number(v.monthly_km||Math.max(0,end-start));return [v.id,v.plate||v.registration_number||"—",v.model||"—",driver?.name||"—",start.toFixed(1),end.toFixed(1),monthly.toFixed(1),Number(v.fuel_consumption ?? 7).toFixed(2)+" L/100 km"]; }));
 }
+async function saveDriverBonus(driverId){
+ const input=$("bonus_"+driverId); if(!input)return;
+ const amount=Math.max(0,Number(input.value||0));
+ const {error}=await db.from("drivers").update({bonus_per_delivery:amount}).eq("id",driverId);
+ if(error){alert("Eroare la salvarea bonusului: "+error.message);return;}
+ const d=drivers.find(x=>Number(x.id)===Number(driverId)); if(d)d.bonus_per_delivery=amount;
+ render();
+ alert("Bonusul pentru "+(d?.name||"șofer")+" a fost salvat: "+amount.toFixed(2)+" lei/comandă.");
+}
+function driverBonusStats(driverId){
+ const d=drivers.find(x=>Number(x.id)===Number(driverId));
+ const amount=Number(d?.bonus_per_delivery||0);
+ const delivered=orders.filter(x=>Number(x.driver_id)===Number(driverId)&&normText(x.status)==='livrata').length;
+ return {amount,delivered,total:amount*delivered};
+}
 function render(){
  $("cntOrders").textContent=orders.length;
  $("cntDelivered").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
@@ -391,7 +440,21 @@ function render(){
  ? `<button class="btn" style="padding:7px 10px;margin-right:5px;background:#0f766e" onclick="navigateToOrder(${x.id})">📍 Navigare</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="takeDeliveryPhoto(${x.id})">📷 Poză</button><button class="btn" style="padding:7px 10px;margin-right:5px" onclick="driverDelivered(${x.id})">Livrată</button><button class="btn" style="padding:7px 10px;margin-right:5px;background:#16a34a" onclick="markPaid(${x.id})">💰 Încasat</button><button class="btn" style="padding:7px 10px;margin-right:5px;background:#6b7280" onclick="markUnpaid(${x.id})">❌ Neîncasat</button><button class="btn" style="padding:7px 10px;background:#dc2626" onclick="driverFailed(${x.id})">Nereușită</button>`
  : "—"]));
  $("clientsTable").innerHTML=table(["ID","Nume","Telefon","Tarif"],clients.map(x=>[x.id,x.name,x.phone,x.tariff]));
- $("driversTable").innerHTML=table(["ID","Nume","Telefon"],drivers.map(x=>[x.id,x.name,x.phone]));
+ $("driversTable").innerHTML=table(
+   ["ID","Nume","Telefon","Bonus/comandă","Comenzi livrate","Bonus acumulat","Acțiune"],
+   drivers.map(x=>{
+     const bs=driverBonusStats(x.id);
+     return [
+       x.id,
+       x.name,
+       x.phone||"—",
+       `<input id="bonus_${x.id}" type="number" min="0" step="0.01" value="${bs.amount.toFixed(2)}" style="width:130px;margin:0">`,
+       bs.delivered,
+       bs.total.toFixed(2)+" lei",
+       `<button class="btn" style="padding:8px 12px" onclick="saveDriverBonus(${x.id})">💾 Salvează</button>`
+     ];
+   })
+ );
  renderVehicles();
 
  const profit=getProfitStats(orders,fuelLogs,expenses);
@@ -633,7 +696,22 @@ async function saveOrder(){
  $("orderSuccess").textContent="Comanda "+(newOrder?.code||"fără AWB")+" a fost salvată."; $("orderSuccess").style.display="block";
  await load();
 }
+function renderDriverDashboard(){
+ if(currentProfile?.role!=='driver')return;
+ const mine=orders.filter(x=>Number(x.driver_id)===Number(currentProfile.driver_id));
+ const start=new Date(); start.setHours(0,0,0,0); const end=new Date(); end.setHours(23,59,59,999);
+ const today=mine.filter(x=>{const d=new Date(x.created_at);return d>=start&&d<=end});
+ const delivered=today.filter(x=>normText(x.status)==='livrata').length;
+ const remaining=today.filter(x=>normText(x.status)!=='livrata'&&normText(x.status)!=='nereusita').length;
+ const paid=today.filter(x=>normText(x.payment_status)==='incasat').reduce((a,x)=>a+Number(x.paid_amount||0),0);
+ $('drvTotal').textContent=today.length; $('drvDelivered').textContent=delivered; $('drvRemaining').textContent=remaining; $('drvPaid').textContent=paid.toFixed(2)+' lei';
+}
 async function logout(){await db.auth.signOut();location.reload()}
-(async()=>{const {data}=await db.auth.getSession();if(data.session){$("login").style.display="none";$("app").style.display="block";await load()}})();
+(async()=>{const {data}=await db.auth.getSession();if(data.session){
+ const {data:profile}=await db.from('profiles').select('name,role,driver_id').eq('id',data.session.user.id).maybeSingle();
+ currentProfile=profile||null;
+ if(profile?.role==='driver'){document.querySelectorAll('.admin-nav').forEach(b=>b.style.display='none');document.querySelectorAll('.driver-only').forEach(b=>b.style.display='block');$('driverName').textContent=profile.name||'Șofer';$('dashboard').classList.remove('on');$('driverHome').classList.add('on');}
+ $("login").style.display="none";$("app").style.display="block";await load(); if(profile?.role==='driver')renderDriverDashboard();
+ }})();
 </script>
 </body></html>
