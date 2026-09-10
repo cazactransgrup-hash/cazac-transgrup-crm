@@ -320,16 +320,20 @@ function renderReport(){
  $("repBonus").textContent=reportBonus.toFixed(2)+" lei";
  $("repProfit").textContent=profit.profit.toFixed(2)+" lei";
  $("reportDrivers").innerHTML=table(
-   ["Șofer","Comenzi","Livrate","Nereușite","Încasat","Neîncasat"],
+   ["Șofer","Comenzi","Livrate","Nereușite","Încasat","Neîncasat","Bonus / livrare","Bonus total"],
    drivers.map(d=>{
      const ds=rs.filter(x=>Number(x.driver_id)===Number(d.id));
      const pd=ds.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
+     const delivered=ds.filter(x=>normText(x.status)==="livrata");
+     const bonusPer=Number(d.bonus_per_delivery||0);
+     const bonusTotal=delivered.reduce((a,x)=>a+Number(x.driver_bonus!=null ? x.driver_bonus : bonusPer),0);
      return [
-       d.name, ds.length,
-       ds.filter(x=>String(x.status||"").toLowerCase()==="livrată").length,
+       d.name, ds.length, delivered.length,
        ds.filter(x=>String(x.status||"").toLowerCase()==="nereușită").length,
        pd.reduce((a,x)=>a+Number(x.paid_amount||0),0).toFixed(2)+" lei",
-       ds.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0).toFixed(2)+" lei"
+       ds.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0).toFixed(2)+" lei",
+       bonusPer.toFixed(2)+" lei",
+       bonusTotal.toFixed(2)+" lei"
      ];
    })
  );
@@ -481,14 +485,17 @@ function render(){
  $("finPaidOrders").textContent=paidOrders.length;
 
  $("driverFinanceTable").innerHTML=table(
-   ["Șofer","Comenzi plătite","Încasat","Cash","Neîncasat"],
+   ["Șofer","Comenzi plătite","Încasat","Cash","Neîncasat","Livrate","Bonus / livrare","Bonus total"],
    drivers.map(d=>{
      const ds=orders.filter(x=>Number(x.driver_id)===Number(d.id));
      const po=ds.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
      const paid=po.reduce((a,x)=>a+Number(x.paid_amount||0),0);
      const cash=po.filter(x=>String(x.payment_method||"").toLowerCase()==="cash").reduce((a,x)=>a+Number(x.paid_amount||0),0);
      const unpaid=ds.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0);
-     return [d.name,po.length,paid.toFixed(2)+" lei",cash.toFixed(2)+" lei",unpaid.toFixed(2)+" lei"];
+     const delivered=ds.filter(x=>normText(x.status)==="livrata");
+     const bonusPer=Number(d.bonus_per_delivery||0);
+     const bonusTotal=delivered.reduce((a,x)=>a+Number(x.driver_bonus!=null ? x.driver_bonus : bonusPer),0);
+     return [d.name,po.length,paid.toFixed(2)+" lei",cash.toFixed(2)+" lei",unpaid.toFixed(2)+" lei",delivered.length,bonusPer.toFixed(2)+" lei",bonusTotal.toFixed(2)+" lei"];
    })
  );
 }
