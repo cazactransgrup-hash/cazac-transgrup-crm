@@ -170,7 +170,8 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <button class="btn" onclick="setReportPeriod('today')">Azi</button>
 <button class="btn" onclick="setReportPeriod('week')">Săptămâna</button>
 <button class="btn" onclick="setReportPeriod('month')">Luna</button>
-<label>Client<div><select id="reportClient" onchange="renderReport()"><option value="">Toți clienții</option></select></div></label>
+<label>Client<div><select id="reportClient"><option value="">Toți clienții</option></select></div></label>
+<label>Șofer<div><select id="reportDriver"><option value="">Toți șoferii</option></select></div></label>
 <button class="btn" onclick="renderReport()">Aplică</button>
 </div>
 </div>
@@ -197,8 +198,12 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;bor
 <h2>💰 Financiar</h2>
 <div class="panel">
 <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
-<label>Client<div><select id="financeClient" onchange="renderFinanceClient()"><option value="">Toți clienții</option></select></div></label>
-<button class="btn" onclick="clearFinanceClient()">Toți clienții</button>
+<div><label>De la</label><input type="date" id="financeFrom"></div>
+<div><label>Până la</label><input type="date" id="financeTo"></div>
+<label>Client<div><select id="financeClient"><option value="">Toți clienții</option></select></div></label>
+<label>Șofer<div><select id="financeDriver"><option value="">Toți șoferii</option></select></div></label>
+<button class="btn" onclick="renderFinance()">Aplică</button>
+<button class="btn" onclick="clearFinanceFilters()">Reset</button>
 </div>
 </div>
 <div class="cards">
@@ -311,25 +316,38 @@ function setReportPeriod(type){
  renderReport();
 }
 function populateClientFilters(){
- const selects=[$("reportClient"),$("financeClient")].filter(Boolean);
- const opts='<option value="">Toți clienții</option>'+clients.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ro')).map(c=>`<option value="${c.id}">${esc(c.name||'Client '+c.id)}</option>`).join('');
- selects.forEach(sel=>{const v=sel.value;sel.innerHTML=opts;if(v&&clients.some(c=>String(c.id)===String(v)))sel.value=v;});
+ const clientOpts='<option value="">Toți clienții</option>'+clients.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ro')).map(c=>`<option value="${c.id}">${esc(c.name||'Client '+c.id)}</option>`).join('');
+ [$('reportClient'),$('financeClient')].filter(Boolean).forEach(sel=>{const v=sel.value;sel.innerHTML=clientOpts;if(v&&clients.some(c=>String(c.id)===String(v)))sel.value=v;});
+ const driverOpts='<option value="">Toți șoferii</option>'+drivers.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ro')).map(d=>`<option value="${d.id}">${esc(d.name||'Șofer '+d.id)}</option>`).join('');
+ [$('reportDriver'),$('financeDriver')].filter(Boolean).forEach(sel=>{const v=sel.value;sel.innerHTML=driverOpts;if(v&&drivers.some(d=>String(d.id)===String(v)))sel.value=v;});
 }
 function clientOrdersTable(list){
  if(!list.length)return "<p style='padding:12px'>Nu există comenzi pentru clientul selectat.</p>";
  return table(["AWB","Client","Destinatar","Adresă","Șofer","Preț livrare","Bonus șofer","Cash","Status","Data"],list.map(x=>[x.code||'—',clients.find(c=>Number(c.id)===Number(x.client_id))?.name||'—',x.recipient||'—',[x.address,x.city].filter(Boolean).join(', ')||'—',drivers.find(d=>Number(d.id)===Number(x.driver_id))?.name||'—',Number(x.delivery_price||0).toFixed(2)+' lei',Number(x.driver_bonus||0).toFixed(2)+' lei',Number(x.cash||0).toFixed(2)+' lei',x.status||'—',x.created_at?new Date(x.created_at).toLocaleString('ro-RO'):'—']));
 }
-function renderFinanceClient(){const id=$("financeClient")?.value||"";const list=id?orders.filter(x=>String(x.client_id)===String(id)):orders;$("financeClientOrders").innerHTML=clientOrdersTable(list);}
-function clearFinanceClient(){if($("financeClient"))$("financeClient").value='';renderFinanceClient();}
+function getDateFilteredOrders(fromId,toId,clientId,driverId){
+ const from=$(fromId)?.value,to=$(toId)?.value;
+ const start=from?new Date(from+"T00:00:00"):new Date('2000-01-01T00:00:00');
+ const end=to?new Date(to+"T23:59:59.999"):new Date('2100-01-01T23:59:59.999');
+ return orders.filter(x=>{const d=new Date(x.created_at);return d>=start&&d<=end&&(!clientId||String(x.client_id)===String(clientId))&&(!driverId||String(x.driver_id)===String(driverId));});
+}
+function renderFinanceClient(){renderFinance();}
+function clearFinanceClient(){clearFinanceFilters();}
+function clearFinanceFilters(){
+ const now=new Date(); const from=new Date(now.getFullYear(),now.getMonth(),1);
+ $('financeFrom').value=localDateInput(from); $('financeTo').value=localDateInput(now);
+ $('financeClient').value=''; $('financeDriver').value=''; renderFinance();
+}
 function renderReport(){
  const from=$("reportFrom")?.value, to=$("reportTo")?.value;
  if(!from||!to)return;
  const start=new Date(from+"T00:00:00");
  const end=new Date(to+"T23:59:59.999");
  const selectedClient=$("reportClient")?.value||"";
+ const selectedDriver=$("reportDriver")?.value||"";
  const rs=orders.filter(x=>{
    const d=new Date(x.created_at);
-   return d>=start && d<=end && (!selectedClient || String(x.client_id)===String(selectedClient));
+   return d>=start && d<=end && (!selectedClient || String(x.client_id)===String(selectedClient)) && (!selectedDriver || String(x.driver_id)===String(selectedDriver));
  });
  const delivered=rs.filter(x=>String(x.status||"").toLowerCase()==="livrată").length;
  const failed=rs.filter(x=>String(x.status||"").toLowerCase()==="nereușită").length;
@@ -461,6 +479,7 @@ function driverBonusStats(driverId){
  return {amount,delivered,total:amount*delivered};
 }
 function render(){
+ if($("financeFrom")&&!$("financeFrom").value){const now=new Date();$("financeFrom").value=localDateInput(new Date(now.getFullYear(),now.getMonth(),1));$("financeTo").value=localDateInput(now);}
  $("cntOrders").textContent=orders.length;
  $("cntDelivered").textContent=orders.filter(x=>String(x.status||"").toLowerCase().startsWith("livrat")).length;
  $("cntDrivers").textContent=drivers.length;$("cntVehicles").textContent=vehicles.length;
@@ -485,32 +504,37 @@ function render(){
  renderVehicles();
 
  const financeClientId=$("financeClient")?.value||"";
- const financeOrders=financeClientId?orders.filter(x=>String(x.client_id)===String(financeClientId)):orders;
- const profit=getProfitStats(financeOrders,fuelLogs,expenses);
+ const financeDriverId=$("financeDriver")?.value||"";
+ const financeOrders=getDateFilteredOrders("financeFrom","financeTo",financeClientId,financeDriverId);
+ const ffrom=$("financeFrom")?.value, fto=$("financeTo")?.value;
+ const fstart=ffrom?new Date(ffrom+"T00:00:00"):new Date('2000-01-01T00:00:00');
+ const fend=fto?new Date(fto+"T23:59:59.999"):new Date('2100-01-01T23:59:59.999');
+ const filteredFuel=fuelLogs.filter(x=>{const d=new Date(x.date);return d>=fstart&&d<=fend;});
+ const filteredExpenses=expenses.filter(x=>{const d=new Date(x.date);return d>=fstart&&d<=fend;});
+ const profit=getProfitStats(financeOrders,filteredFuel,filteredExpenses);
  $("finBonus").textContent=profit.bonus.toFixed(2)+" lei";
  $("finRevenue").textContent=profit.revenue.toFixed(2)+" lei";
  $("finExpenses").textContent=profit.totalExpenses.toFixed(2)+" lei";
  $("finProfit").textContent=profit.profit.toFixed(2)+" lei";
  const paidOrders=financeOrders.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
  const paidTotal=paidOrders.reduce((a,x)=>a+Number(x.paid_amount||0),0);
- const unpaidTotal=financeOrders.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat")
-   .reduce((a,x)=>a+Number(x.cash||0),0);
- const cashTotal=paidOrders.filter(x=>String(x.payment_method||"").toLowerCase()==="cash")
-   .reduce((a,x)=>a+Number(x.paid_amount||0),0);
+ const unpaidTotal=financeOrders.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0);
+ const cashTotal=paidOrders.filter(x=>String(x.payment_method||"").toLowerCase()==="cash").reduce((a,x)=>a+Number(x.paid_amount||0),0);
  $("finPaid").textContent=paidTotal.toFixed(2)+" lei";
  $("finUnpaid").textContent=unpaidTotal.toFixed(2)+" lei";
  $("finCash").textContent=cashTotal.toFixed(2)+" lei";
  $("finPaidOrders").textContent=paidOrders.length;
 
  $("driverFinanceTable").innerHTML=table(
-   ["Șofer","Comenzi plătite","Încasat","Cash","Neîncasat"],
-   drivers.map(d=>{
+   ["Șofer","Comenzi","Comenzi plătite","Încasat","Cash","Neîncasat","Bonus"],
+   drivers.filter(d=>!financeDriverId||String(d.id)===String(financeDriverId)).map(d=>{
      const ds=financeOrders.filter(x=>Number(x.driver_id)===Number(d.id));
      const po=ds.filter(x=>String(x.payment_status||"").toLowerCase()==="încasat");
      const paid=po.reduce((a,x)=>a+Number(x.paid_amount||0),0);
      const cash=po.filter(x=>String(x.payment_method||"").toLowerCase()==="cash").reduce((a,x)=>a+Number(x.paid_amount||0),0);
      const unpaid=ds.filter(x=>String(x.payment_status||"").toLowerCase()!=="încasat").reduce((a,x)=>a+Number(x.cash||0),0);
-     return [d.name,po.length,paid.toFixed(2)+" lei",cash.toFixed(2)+" lei",unpaid.toFixed(2)+" lei"];
+     const bonus=ds.filter(x=>normText(x.status)==="livrata").reduce((a,x)=>a+Number(x.driver_bonus||0),0);
+     return [d.name,ds.length,po.length,paid.toFixed(2)+" lei",cash.toFixed(2)+" lei",unpaid.toFixed(2)+" lei",bonus.toFixed(2)+" lei"];
    })
  );
  $("financeClientOrders").innerHTML=clientOrdersTable(financeOrders);
